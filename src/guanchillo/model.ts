@@ -1,8 +1,9 @@
 import { gores, isSphereSize, sphereLayout } from './sphere.js';
 
-export const limits = Object.freeze({ dimension: 256, colors: 24, name: 80, file: 1_000_000 });
+export const limits = Object.freeze({ dimension: 256, colors: 8, defaultColors: 4, name: 80, file: 1_000_000 });
+const legacyColorLimit = 24;
 
-interface Dimensions {
+export interface Dimensions {
   rows: number;
   cols: number;
 }
@@ -60,7 +61,6 @@ const samplePalette: Color[] = [
   { name: 'Pine green', hex: '#27574e' },
   { name: 'Sea glass', hex: '#739a8c' },
   { name: 'Terracotta', hex: '#bd6b50' },
-  { name: 'Island gold', hex: '#e4b951' },
 ];
 
 function newPatternId(): string {
@@ -108,7 +108,7 @@ export function examplePattern(): Pattern {
       if (distance === 8) color = 1;
       if (distance === 6) color = 0;
       if (distance === 5 || distance === 4) color = 3;
-      if (distance === 3 || distance === 2) color = 4;
+      if (distance === 3 || distance === 2) color = 2;
       if (distance === 1) color = 0;
       if (distance === 0) color = 1;
       if ((x < 3 && y === 2 - x) || (x === 3 && y === 3)) color = 2;
@@ -141,7 +141,7 @@ export function parsePattern(value: unknown): PatternData & { id: string | null 
   if (shape === 'sphere' && (!isSphereSize(rows) || cols !== sphereLayout(rows).goreWidth * gores)) {
     throw new Error('The sphere dimensions do not match its round count.');
   }
-  if (!name || name.length > limits.name || !Array.isArray(palette) || !palette.length || palette.length > limits.colors) {
+  if (!name || name.length > limits.name || !Array.isArray(palette) || !palette.length || palette.length > legacyColorLimit) {
     throw new Error('Check the pattern name and color palette.');
   }
   const colors = palette.map((entry: unknown) => {
@@ -161,7 +161,7 @@ export function parsePattern(value: unknown): PatternData & { id: string | null 
   return { version, id, name, rows, cols, palette: colors, cells: [...cells], ...(shape ? { shape } : {}) };
 }
 
-function resamplePattern(pattern: Pattern, rows: number, cols: number): Pattern {
+export function resamplePattern(pattern: Pattern, rows: number, cols: number): Pattern {
   const result: Pattern = {
     ...pattern, rows, cols: pattern.shape === 'sphere' ? sphereLayout(rows).goreWidth * gores : cols,
     cells: [],
@@ -177,8 +177,8 @@ function resamplePattern(pattern: Pattern, rows: number, cols: number): Pattern 
   return result;
 }
 
-export function copyTemplate(pattern: Pattern, rows: number, cols: number, name: string): Pattern {
-  return { ...resamplePattern(pattern, rows, cols), id: newPatternId(), name, palette: structuredClone(pattern.palette) };
+export function copyPattern(pattern: Pattern, name: string): Pattern {
+  return { ...structuredClone(pattern), id: newPatternId(), name };
 }
 
 export function resizePattern(pattern: Pattern, rows: number, cols: number): Pattern {

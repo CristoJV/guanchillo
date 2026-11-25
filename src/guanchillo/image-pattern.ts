@@ -1,4 +1,4 @@
-import { limits, type Pattern } from './model.js';
+import { counts, limits, type Pattern } from './model.js';
 
 type RGB = [number, number, number];
 
@@ -79,13 +79,17 @@ function parseHex(value: string): RGB {
   return [1, 3, 5].map(index => Number.parseInt(value.slice(index, index + 2), 16)) as RGB;
 }
 
+function colorDistance(rgb: RGB, [red, green, blue]: RGB): number {
+  const meanRed = (rgb[0] + red) / 2;
+  return (2 + meanRed / 256) * (rgb[0] - red) ** 2 + 4 * (rgb[1] - green) ** 2 +
+    (2 + (255 - meanRed) / 256) * (rgb[2] - blue) ** 2;
+}
+
 function nearestColor(rgb: RGB, palette: RGB[]): number {
   let nearest = 0;
   let distance = Infinity;
-  for (const [index, [red, green, blue]] of palette.entries()) {
-    const meanRed = (rgb[0] + red) / 2;
-    const delta = (2 + meanRed / 256) * (rgb[0] - red) ** 2 + 4 * (rgb[1] - green) ** 2 +
-      (2 + (255 - meanRed) / 256) * (rgb[2] - blue) ** 2;
+  for (const [index, color] of palette.entries()) {
+    const delta = colorDistance(rgb, color);
     if (delta < distance) {
       nearest = index;
       distance = delta;
@@ -94,11 +98,52 @@ function nearestColor(rgb: RGB, palette: RGB[]): number {
   return nearest;
 }
 
-export function quantizeImage(pixels: Uint8ClampedArray, colors: number | string[]): Pick<Pattern, 'palette' | 'cells'> {
-  const colorCount = typeof colors === 'number' ? colors : colors.length;
-  if (!Number.isInteger(colorCount) || colorCount < 1 || colorCount > limits.colors) {
-    throw new Error('Choose between 1 and 24 colors.');
+function checkColorCount(count: number) {
+  if (!Number.isInteger(count) || count < 1 || count > limits.colors) {
+    throw new Error('Choose between 1 and ' + limits.colors + ' colors.');
   }
+}
+
+export function reducePatternPalette(pattern: Pattern, limit: number): Pick<Pattern, 'palette' | 'cells'> {
+  checkColorCount(limit);
+  const frequency = counts(pattern).colors;
+  const groups = pattern.palette.map(({ hex }, index) => ({
+    index, rgb: parseHex(hex), weight: frequency[index], members: [index],
+  })).filter(group => group.weight > 0);
+  if (!groups.length) return { palette: [pattern.palette[0]], cells: pattern.cells };
+
+  while (groups.length > limit) {
+    let best = Infinity;
+    let merge = [0, 1];
+    for (let left = 0; left < groups.length - 1; left++) {
+      for (let right = left + 1; right < groups.length; right++) {
+        const a = groups[left];
+        const b = groups[right];
+        const cost = colorDistance(a.rgb, b.rgb) * a.weight * b.weight / (a.weight + b.weight);
+        if (cost < best) {
+          best = cost;
+          merge = [left, right];
+        }
+      }
+    }
+    const [left, right] = merge;
+    const [keep, remove] = groups[left].weight >= groups[right].weight ? [left, right] : [right, left];
+    groups[keep].weight += groups[remove].weight;
+    groups[keep].members.push(...groups[remove].members);
+    groups.splice(remove, 1);
+  }
+  const colorMap = new Map<number, number>();
+  for (const [index, group] of groups.entries()) {
+    for (const member of group.members) colorMap.set(member, index);
+  }
+  return {
+    palette: groups.map(({ index }) => pattern.palette[index]),
+    cells: pattern.cells.map(cell => colorMap.get(cell) ?? -1),
+  };
+}
+
+export function quantizeImage(pixels: Uint8ClampedArray, colors: number | string[]): Pick<Pattern, 'palette' | 'cells'> {
+  checkColorCount(typeof colors === 'number' ? colors : colors.length);
 
   const histogram = new Map<number, Sample>();
   const keys: number[] = [];

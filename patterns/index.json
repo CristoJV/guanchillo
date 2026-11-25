@@ -21,8 +21,28 @@
   ],
   "pixel": [
     "blocky-explorer",
+    "night-wisp",
     "moss-monster",
+    "barnyard-chicken",
+    "ember-spirit",
+    "ivory-mask",
+    "woolly-lamb",
     "pink-pig",
-    "barnyard-chicken"
+    "tide-sprite",
+    "copper-scout",
+    "patchwork-calf",
+    "bog-walker",
+    "blush-spider",
+    "lagoon-wanderer",
+    "stone-watcher",
+    "frost-specter"
+  ],
+  "originals": [
+    "atlantic-wave",
+    "teide-dawn",
+    "woven-diamond",
+    "island-gecko",
+    "citrus-lantern",
+    "ocean-compass"
   ]
 }

@@ -1,9 +1,11 @@
 import { byId } from './dom.js';
 import { makeGlobe } from './globe.js';
-import { parsePattern, type Pattern } from './model.js';
+import { reducePatternPalette } from './image-pattern.js';
+import { limits, parsePattern, resamplePattern, type Dimensions, type Pattern } from './model.js';
 import { drawFlatPreview } from './preview.js';
+import { isSphereSize } from './sphere.js';
 
-const categories = ['space', 'holiday', 'pixel'] as const;
+const categories = ['space', 'holiday', 'pixel', 'originals'] as const;
 type Category = (typeof categories)[number];
 type Action = 'edit' | 'work';
 
@@ -11,9 +13,51 @@ export interface PatternTemplate {
   key: string;
   category: Category;
   pattern: Pattern;
+  recommended: Dimensions;
 }
 
 let pending: Promise<PatternTemplate[]> | undefined;
+
+export function parseTemplate(key: string, file: unknown): Pick<PatternTemplate, 'pattern' | 'recommended'> {
+  const { id, ...master } = parsePattern(file);
+  if (id !== 'guanchillo-template-' + key || master.palette.length > limits.colors) {
+    throw new Error('Invalid template identity or palette.');
+  }
+  const size = typeof file === 'object' && file && 'recommended' in file ? file.recommended : null;
+  if (typeof size !== 'object' || !size || !('rows' in size) || !('cols' in size) ||
+    typeof size.rows !== 'number' || typeof size.cols !== 'number' ||
+    !Number.isInteger(size.rows) || !Number.isInteger(size.cols) ||
+    size.rows < 1 || size.rows > master.rows || size.cols < 1 || size.cols > master.cols ||
+    (master.shape === 'sphere' && (!isSphereSize(size.rows) || size.cols !== size.rows * 2))) {
+    throw new Error('Invalid recommended template size.');
+  }
+  return { pattern: { ...master, id }, recommended: { rows: size.rows, cols: size.cols } };
+}
+
+export function deriveTemplate(template: Pick<PatternTemplate, 'pattern'>, size: Dimensions, colors: number): Pattern {
+  if (!Number.isInteger(size.rows) || size.rows < 1 || !Number.isInteger(size.cols) || size.cols < 1 ||
+    (template.pattern.shape === 'sphere' && size.cols !== size.rows * 2)) {
+    throw new Error('Invalid template dimensions.');
+  }
+  if (size.rows > template.pattern.rows || size.cols > template.pattern.cols) {
+    throw new Error('Template size exceeds its master chart.');
+  }
+  const resized = resamplePattern(template.pattern, size.rows, size.cols);
+  return {
+    ...resized, ...reducePatternPalette(resized, colors),
+    id: resized.id + '-' + resized.rows + 'x' + resized.cols + '-' + colors + '-colors',
+  };
+}
+
+export function setColorChoices(select: HTMLSelectElement, template?: PatternTemplate) {
+  const max = template?.pattern.palette.length ?? 0;
+  const options = Array.from({ length: max }, (_, index) => {
+    const count = index + 1;
+    return new Option(count + (count === 1 ? ' color' : ' colors'), String(count));
+  });
+  select.replaceChildren(...options);
+  if (max) select.value = String(Math.min(limits.defaultColors, max));
+}
 
 async function loadTemplates(): Promise<PatternTemplate[]> {
   const directory = new URL('patterns/', document.baseURI);
@@ -39,11 +83,9 @@ async function loadTemplates(): Promise<PatternTemplate[]> {
       templates.push({ key, category });
     }
   }
-  return Promise.all(templates.map(async ({ key, category }) => {
-    const { id, ...pattern } = parsePattern(await read(key));
-    if (id !== 'guanchillo-template-' + key) throw new Error('Invalid template identity.');
-    return { key, category, pattern: { ...pattern, id } };
-  }));
+  return Promise.all(templates.map(async ({ key, category }) => ({
+    key, category, ...parseTemplate(key, await read(key)),
+  })));
 }
 
 export function getTemplates(): Promise<PatternTemplate[]> {
@@ -75,35 +117,61 @@ export function makeCollection(open: (entry: Pattern, action: Action) => void) {
     status.textContent = shown + (shown === 1 ? ' pattern' : ' patterns');
   }
 
-  function renderCard({ category, pattern }: PatternTemplate) {
+  function renderCard(template: PatternTemplate, largestPlanet: number) {
+    const { category, pattern, recommended } = template;
     const article = document.importNode(cardTemplate.content, true).querySelector('article')!;
     const canvas = article.querySelector('canvas')!;
     const name = article.querySelector('h2')!;
     const details = article.querySelector('p')!;
     const edit = article.querySelector<HTMLButtonElement>('[data-template-action="edit"]')!;
     const crochet = article.querySelector<HTMLButtonElement>('[data-template-action="work"]')!;
+    const colors = article.querySelector<HTMLSelectElement>('[data-template-colors]')!;
+    const resolution = article.querySelector<HTMLSelectElement>('[data-template-resolution]')!;
     article.dataset.category = category;
     name.textContent = pattern.name;
+    colors.setAttribute('aria-label', 'Colors for ' + pattern.name);
+    resolution.setAttribute('aria-label', 'Resolution for ' + pattern.name);
+    colors.closest('label')!.hidden = pattern.palette.length < 2;
+    resolution.closest('label')!.hidden = pattern.rows === recommended.rows && pattern.cols === recommended.cols;
+    setColorChoices(colors, template);
+    let selected: Pattern;
     edit.setAttribute('aria-label', 'Edit ' + pattern.name);
     crochet.setAttribute('aria-label', 'Crochet ' + pattern.name);
-    edit.addEventListener('click', () => open(pattern, 'edit'));
-    crochet.addEventListener('click', () => open(pattern, 'work'));
+    edit.addEventListener('click', () => open(selected, 'edit'));
+    crochet.addEventListener('click', () => open(selected, 'work'));
 
+    let render: (entry: Pattern) => void;
     if (pattern.shape === 'sphere') {
       article.dataset.shape = 'sphere';
-      details.textContent = pattern.rows + ' rounds · 3D';
       canvas.width = canvas.height = 160;
       canvas.tabIndex = 0;
       canvas.setAttribute('aria-label', '3D preview of ' + pattern.name + '. Use arrow keys to rotate.');
-      makeGlobe(canvas).show(pattern);
+      render = makeGlobe(canvas).show;
     } else {
-      details.textContent = pattern.cols + ' × ' + pattern.rows + ' stitches';
       canvas.setAttribute('aria-label', 'Flat chart of ' + pattern.name);
-      const longSide = Math.max(pattern.rows, pattern.cols);
-      canvas.style.width = (pattern.cols / longSide * 100) + '%';
-      canvas.style.height = (pattern.rows / longSide * 100) + '%';
-      drawFlatPreview(canvas, pattern);
+      render = entry => {
+        const longSide = Math.max(entry.rows, entry.cols);
+        canvas.style.width = (entry.cols / longSide * 100) + '%';
+        canvas.style.height = (entry.rows / longSide * 100) + '%';
+        drawFlatPreview(canvas, entry);
+      };
     }
+    function updatePreview() {
+      const size = resolution.value === 'high' ? pattern : recommended;
+      const budget = Number(colors.value);
+      selected = deriveTemplate(template, size, budget);
+      const shapeSummary = selected.shape === 'sphere' ? selected.rows + ' rounds · 3D' :
+        selected.cols + ' × ' + selected.rows + ' stitches';
+      details.textContent = shapeSummary + (selected.palette.length < budget ?
+        ' · ' + selected.palette.length + ' colors used' : '');
+      if (category === 'space') {
+        article.style.setProperty('--globe-size', Math.min(100, 35 + 65 * selected.rows / largestPlanet) + '%');
+      }
+      render(selected);
+    }
+    colors.addEventListener('change', updatePreview);
+    resolution.addEventListener('change', updatePreview);
+    updatePreview();
     return { element: article, category };
   }
 
@@ -114,7 +182,8 @@ export function makeCollection(open: (entry: Pattern, action: Action) => void) {
     status.textContent = 'Loading patterns…';
     try {
       const entries = await getTemplates();
-      cards.push(...entries.map(renderCard));
+      const largestPlanet = Math.max(1, ...entries.filter(entry => entry.category === 'space').map(entry => entry.recommended.rows));
+      cards.push(...entries.map(entry => renderCard(entry, largestPlanet)));
       gallery.replaceChildren(...cards.map(card => card.element));
       showFilter();
     } catch {

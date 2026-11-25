@@ -1,9 +1,9 @@
 import {
-  chartRow, copyTemplate, counts, examplePattern, hasStarted, jumpToStitch, limits, makeColorGuide,
+  chartRow, copyPattern, counts, examplePattern, hasStarted, jumpToStitch, limits, makeColorGuide,
   newPattern, newProgress, newSphere, deserializePattern, resizePattern, serializePattern, tileAt, totalSteps,
   type GridPosition, type Pattern, type Progress,
 } from './model.js';
-import { getTemplates, makeCollection, type PatternTemplate } from './collection.js';
+import { deriveTemplate, getTemplates, makeCollection, setColorChoices, type PatternTemplate } from './collection.js';
 import { byId } from './dom.js';
 import { makeGlobe } from './globe.js';
 import { makeGrid } from './grid.js';
@@ -588,6 +588,7 @@ function returnToColor(index: number) {
 
 byId('color-form').addEventListener('submit', event => {
   event.preventDefault();
+  if (editingColor === null && pattern.palette.length >= limits.colors) return;
   const name = byId('color-name', 'input').value.trim();
   if (!name) {
     byId('color-name', 'input').value = '';
@@ -626,7 +627,8 @@ function renderLibrary() {
     const name = document.createElement('span');
     name.textContent = entry.name;
     const size = document.createElement('small');
-    size.textContent = entry.shape === 'sphere' ? entry.rows + ' rounds' : entry.rows + ' × ' + entry.cols;
+    const dimensions = entry.shape === 'sphere' ? entry.rows + ' rounds' : entry.rows + ' × ' + entry.cols;
+    size.textContent = dimensions + ' · ' + entry.palette.length + (entry.palette.length === 1 ? ' color' : ' colors');
     open.append(name, size);
     if (entry.id === pattern.id) open.setAttribute('aria-current', 'true');
     open.addEventListener('click', () => {
@@ -707,6 +709,7 @@ nameInput.addEventListener('change', () => {
 
 const newShape = byId('new-shape', 'select');
 const newTemplate = byId('new-template', 'select');
+const newTemplateColors = byId('new-template-colors', 'select');
 const newRounds = byId('new-rounds', 'input');
 const newRows = byId('new-rows', 'input');
 const newCols = byId('new-cols', 'input');
@@ -715,8 +718,8 @@ const patternDialog = byId('pattern-dialog', 'dialog');
 let creationTemplates: PatternTemplate[] = [];
 let suggestedName = '';
 
-function selectedTemplate(): Pattern | undefined {
-  return creationTemplates.find(entry => entry.key === newTemplate.value)?.pattern;
+function selectedTemplate(): PatternTemplate | undefined {
+  return creationTemplates.find(entry => entry.key === newTemplate.value);
 }
 
 function refreshTemplateOptions() {
@@ -730,9 +733,11 @@ function refreshTemplateOptions() {
 function patternDraft(name: string): Pattern {
   const sphere = newShape.value === 'sphere';
   const rows = sphere ? newRounds.valueAsNumber : newRows.valueAsNumber;
-  const cols = newCols.valueAsNumber;
+  const cols = sphere ? rows * 2 : newCols.valueAsNumber;
   const template = selectedTemplate();
-  if (template) return copyTemplate(template, rows, cols, name);
+  if (template) {
+    return copyPattern(deriveTemplate(template, { rows, cols }, Number(newTemplateColors.value)), name);
+  }
   return sphere ? newSphere(rows, name) : newPattern(rows, cols, name);
 }
 
@@ -745,7 +750,7 @@ function refreshCreation() {
   newCols.disabled = sphere;
   newRounds.disabled = !sphere;
   const rounds = newRounds.valueAsNumber;
-  const showPreview = sphere && isSphereSize(rounds);
+  const showPreview = sphere && isSphereSize(rounds) && newRounds.validity.valid;
   byId('create-sphere-view').hidden = !showPreview;
   if (!showPreview) {
     setText('sphere-summary', '');
@@ -757,13 +762,22 @@ function refreshCreation() {
 }
 
 function applyTemplateChoice() {
-  const chosen = selectedTemplate();
+  const template = selectedTemplate();
+  const chosen = template?.pattern;
+  setColorChoices(newTemplateColors, template);
+  byId('new-template-colors-field').hidden = !chosen || chosen.palette.length < 2;
   if (!newName.value.trim() || newName.value === suggestedName) newName.value = chosen?.name ?? '';
   suggestedName = chosen?.name ?? '';
-  if (chosen?.shape === 'sphere') newRounds.valueAsNumber = chosen.rows;
-  else if (chosen) {
-    newRows.valueAsNumber = chosen.rows;
-    newCols.valueAsNumber = chosen.cols;
+  newRounds.max = String(chosen?.shape === 'sphere' ? chosen.rows : sphereSizes.max);
+  newRows.max = String(chosen && chosen.shape !== 'sphere' ? chosen.rows : limits.dimension);
+  newCols.max = String(chosen && chosen.shape !== 'sphere' ? chosen.cols : limits.dimension);
+  setText('new-rounds-note', 'Use a multiple of 3 from 6 to ' + newRounds.max + '.');
+  if (template) {
+    if (template.pattern.shape === 'sphere') newRounds.valueAsNumber = template.recommended.rows;
+    else {
+      newRows.valueAsNumber = template.recommended.rows;
+      newCols.valueAsNumber = template.recommended.cols;
+    }
   }
   refreshCreation();
 }
@@ -773,7 +787,13 @@ newShape.addEventListener('change', () => {
   applyTemplateChoice();
 });
 newRounds.addEventListener('input', refreshCreation);
+newRows.addEventListener('input', () => {
+  const master = selectedTemplate()?.pattern;
+  if (newShape.value !== 'flat' || !master || !newRows.validity.valid) return;
+  newCols.valueAsNumber = Math.max(1, Math.round(newRows.valueAsNumber * master.cols / master.rows));
+});
 newTemplate.addEventListener('change', applyTemplateChoice);
+newTemplateColors.addEventListener('change', refreshCreation);
 
 byId('create-form', 'form').addEventListener('submit', event => {
   event.preventDefault();
@@ -837,7 +857,7 @@ byId('new-pattern').addEventListener('click', async () => {
   suggestedName = '';
   newTemplate.value = 'blank';
   refreshTemplateOptions();
-  refreshCreation();
+  applyTemplateChoice();
   patternDialog.showModal();
   const templateStatus = byId('new-template-status');
   templateStatus.hidden = creationTemplates.length > 0;

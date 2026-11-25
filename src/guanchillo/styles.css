@@ -277,11 +277,13 @@ dialog p { color: var(--muted); font-size: 0.9rem; }
 .template-card[data-category="holiday"] .template-preview { background: radial-gradient(ellipse at 45% 37%, #f8f1e7, #eee3d5); }
 .template-motif { display: grid; place-items: center; width: min(76%, 9.2rem); aspect-ratio: 1; }
 .template-motif canvas { display: block; min-width: 0; min-height: 0; image-rendering: pixelated; box-shadow: 0 0.4rem 0.85rem #2a2c2218; }
-.template-card[data-shape="sphere"] canvas { width: 100%; height: 100%; touch-action: none; cursor: grab; image-rendering: auto; border-radius: 50%; box-shadow: none; filter: drop-shadow(0.35rem 0.55rem 0.45rem #26352d33); }
+.template-card[data-shape="sphere"] canvas { width: var(--globe-size, 100%); height: auto; aspect-ratio: 1; touch-action: none; cursor: grab; image-rendering: auto; border-radius: 50%; box-shadow: none; filter: drop-shadow(0.35rem 0.55rem 0.45rem #26352d33); }
 .template-card[data-shape="sphere"] canvas:active { cursor: grabbing; }
 .template-details { padding: 0.92rem; }
 .template-details h2 { color: var(--dark-green); font-size: 1.13rem; }
 .template-details p { color: var(--muted); font-size: 0.82rem; margin: 0.24rem 0 0.72rem; }
+.template-colors { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 0.7rem; margin-bottom: 0.65rem; color: var(--muted); font-size: 0.82rem; }
+.template-colors select { font-size: 0.85rem; min-height: 2rem; }
 .template-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 0.45rem; }
 
 .image-dialog { width: min(48rem, calc(100% - 2rem)); }
@@ -302,6 +304,7 @@ dialog p { color: var(--muted); font-size: 0.9rem; }
   .template-preview { min-height: 8rem; }
   .template-details { padding: 0.6rem; }
   .template-details h2 { font-size: 0.98rem; }
+  .template-colors { grid-template-columns: minmax(0, 1fr); row-gap: 0.25rem; }
   .template-actions { gap: 0.25rem; }
   .template-actions .button { padding-inline: 0.3rem; }
   .template-actions .icon { display: none; }

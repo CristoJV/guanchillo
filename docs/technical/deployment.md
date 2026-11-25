@@ -2,7 +2,9 @@
 
 ## GitHub Pages
 
-Select **GitHub Actions** under **Settings → Pages → Build and deployment → Source**. A push to `main` runs the [Pages workflow](../../.github/workflows/pages.yml), which builds and tests the app and uploads only `dist/`. GitHub issues the deployment credentials for the job. [GitHub Pages workflow documentation](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages)
+Select **GitHub Actions** under **Settings → Pages → Build and deployment → Source**. This one-time step needs administrator or maintainer access. The [Pages workflow](../../.github/workflows/pages.yml) checks the site configuration first, then builds, tests and uploads only `dist/`. It runs on a push to `main`. To retry after enabling Pages, run **Publish GitHub Pages** manually from the **Actions** tab with `main` selected. [GitHub Pages publishing sources](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site)
+
+The default project URL is [cristojv.github.io/guanchillo](https://cristojv.github.io/guanchillo/). The deployment job reports the active URL when it succeeds. [GitHub Pages URL format](https://docs.github.com/en/pages/getting-started-with-github-pages/what-is-github-pages#types-of-github-pages-sites)
 
 Treat committed files and the static build as material that can be published. Keep credentials in ignored local files. GitHub's [push protection](https://docs.github.com/en/code-security/concepts/secret-security/push-protection) can block recognized secrets before a push reaches the repository.
 

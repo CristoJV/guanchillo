@@ -14,14 +14,16 @@ Zoom in to work on details. Select **Pan** and drag to move around. **Fit to vie
 
 1. Select **Import image** and choose a local PNG, JPEG or WebP file.
 2. Set the number of **Columns** and **Rows** in stitches. The importer suggests a starting size based on the image's proportions.
-3. Pick **Automatic colors** and set the maximum, or pick **My colors** to add and adjust the exact yarn colors you plan to use.
+3. Pick **Automatic colors** and set the maximum, or pick **My colors** to add and adjust the exact yarn colors you plan to use. Four is the default. New charts allow up to eight yarn colors.
 4. Check the stitch preview, then select **Create pattern** to open it in **Design**. Transparent pixels become unassigned stitches.
 
 ## Browse the pattern collection
 
-Open **Collection** to browse the Solar System, Christmas and Pixel Faces templates. The cards show a flat chart or a rotatable sphere. Choose **Edit** to customize a copy or **Crochet** to start following it. Returning to the same card reopens your local copy, including any progress.
+Open **Collection** to browse the Solar System, Christmas, Pixel Faces and Originals. Pick **Recommended** for the suggested size or **High** for the master size. Use **Colors** to choose how many yarns to use, up to the number available in the master. The preview updates before you choose **Edit** or **Crochet**. Returning with the same settings reopens the local copy, including its progress.
 
-For a separate copy at a different size, use **New pattern**, choose the shape and select a template. Earth uses eight colors. The planetary templates depict spherical surfaces with colored stitching. [NASA's planet guide](https://science.nasa.gov/solar-system/planets/)
+For a custom size, choose a template in **New pattern**, then enter the stitch dimensions or number of rounds. Guanchillo derives the chart from the master. Spheres top out at 63 rounds, the closest usable size to 64 under the multiple-of-three spiral rule. Flat templates have 64 stitches along the longer side and changing their height adjusts the width proportionally.
+
+Use **Recommended** for the approximate Solar System scale when working with the same yarn and hook. The Moon uses 12 rounds, Earth uses 24, and Jupiter uses 42. [NASA's planetary fact sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/)
 
 ## Design a sphere
 

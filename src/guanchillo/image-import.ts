@@ -5,7 +5,7 @@ import { drawFlatPreview } from './preview.js';
 
 const maxFileBytes = 20_000_000;
 const maxImagePixels = 24_000_000;
-const defaultPalette = ['#244d45', '#c46f57', '#f4e6c8'];
+const defaultPalette = ['#244d45', '#c46f57', '#f4e6c8', '#325f80'];
 
 export function makeImageImporter(onCreate: (pattern: Pattern) => void) {
   const dialog = byId('image-dialog', 'dialog');
