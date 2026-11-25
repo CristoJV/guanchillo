@@ -33,6 +33,7 @@ export function makeGrid(elements: GridElements) {
   let pitch = 1;
   let anchor: GridPosition | null = null;
   let direction: Progress['direction'] = 'rtl';
+  let flipped = false;
 
   function labelRuler(element: HTMLElement, count: number, available: number, descending: boolean) {
     const step = Math.max(1, Math.ceil(24 / available));
@@ -64,8 +65,9 @@ export function makeGrid(elements: GridElements) {
     if (sphere) {
       const { rounds, goreWidth } = sphereLayout(pattern.rows);
       shell.style.setProperty('--gore-width', String(goreWidth));
-      labelRuler(top, gores, goreWidth * pitch, false);
-      const labels = [...rounds].reverse().map(round => {
+      labelRuler(top, gores, goreWidth * pitch, flipped);
+      const orderedRounds = flipped ? rounds : [...rounds].reverse();
+      const labels = orderedRounds.map(round => {
         const label = document.createElement('span');
         if (round.number === 1 || round.number === pattern.rows ||
           round.number % Math.max(1, Math.ceil(15 / pitch)) === 0) {
@@ -80,16 +82,27 @@ export function makeGrid(elements: GridElements) {
     }
   }
 
+  function orientY(y: number) {
+    return flipped ? pattern.rows - 1 - y : y;
+  }
+
+  function orientX(x: number, width: number) {
+    return flipped ? pattern.cols - x - width : x;
+  }
+
   function displayX(tile: GridPosition) {
     if (pattern.shape !== 'sphere') return tile.x;
     const { goreWidth, rounds } = sphereLayout(pattern.rows);
-    return projectedX(goreWidth, rounds[pattern.rows - tile.y - 1], tile.x);
+    return orientX(projectedX(goreWidth, rounds[pattern.rows - tile.y - 1], tile.x), 1);
   }
 
   function columnAt(x: number, y: number, nearest = false): number | null {
     if (pattern.shape !== 'sphere') return Math.floor(x);
     const { goreWidth, rounds } = sphereLayout(pattern.rows);
-    return projectedStitch(goreWidth, rounds[pattern.rows - y - 1], x, nearest);
+    const round = rounds[pattern.rows - y - 1];
+    const column = projectedStitch(goreWidth, round, x, nearest);
+    // The centered gores have the same outline when mirrored.
+    return flipped && column !== null ? round.stitches - 1 - column : column;
   }
 
   function drawSphereLines() {
@@ -98,8 +111,8 @@ export function makeGrid(elements: GridElements) {
       if (length <= 0) return;
       const span = document.createElement('span');
       span.className = className;
-      span.style.setProperty('--x', String(x));
-      span.style.setProperty('--y', String(y));
+      span.style.setProperty('--x', String(orientX(x, length)));
+      span.style.setProperty('--y', String(orientY(y)));
       span.style.setProperty('--length', String(length));
       if (symbol) span.textContent = symbol;
       fragment.append(span);
@@ -133,23 +146,26 @@ export function makeGrid(elements: GridElements) {
     const color = pattern.palette[pattern.cells[chartRow(pattern, y).start + x]];
     const horizontal = pattern.shape === 'sphere' ? 2 : 1;
     ink.fillStyle = color?.hex ?? blank;
-    ink.fillRect(displayX({ x, y }) * horizontal, y, horizontal, 1);
+    ink.fillRect(displayX({ x, y }) * horizontal, orientY(y), horizontal, 1);
   }
 
-  function drawPattern(next: Pattern, nextDirection: Progress['direction']) {
+  function drawPattern(next: Pattern, nextDirection: Progress['direction'], design: boolean) {
     const changedGeometry = !pattern || pattern.rows !== next.rows || pattern.cols !== next.cols || pattern.shape !== next.shape;
     const changedDirection = direction !== nextDirection;
+    const nextFlipped = design && next.shape === 'sphere';
+    const changedOrientation = flipped !== nextFlipped;
     pattern = next;
     direction = nextDirection;
+    flipped = nextFlipped;
     if (changedGeometry) {
       shell.classList.toggle('sphere', pattern.shape === 'sphere');
       colors.width = pattern.cols * (pattern.shape === 'sphere' ? 2 : 1);
       colors.height = pattern.rows;
       done.width = colors.width * progressPixels;
       done.height = pattern.rows * progressPixels;
-      layout();
     }
-    if (changedGeometry || changedDirection) drawSphereLines();
+    if (changedGeometry || changedOrientation) layout();
+    if (changedGeometry || changedDirection || changedOrientation) drawSphereLines();
     for (let y = 0; y < pattern.rows; y++) {
       const { stitches } = chartRow(pattern, y);
       for (let x = 0; x < stitches; x++) paintCell(x, y);
@@ -159,16 +175,16 @@ export function makeGrid(elements: GridElements) {
   function positionAt(event: MouseEvent): GridPosition | null {
     const rect = surface.getBoundingClientRect();
     const x = (event.clientX - rect.left) * pattern.cols / rect.width;
-    const y = Math.floor((event.clientY - rect.top) * pattern.rows / rect.height);
+    const y = orientY(Math.floor((event.clientY - rect.top) * pattern.rows / rect.height));
     if (x < 0 || x >= pattern.cols || y < 0 || y >= pattern.rows) return null;
     const column = columnAt(x, y);
     return column === null ? null : { x: column, y };
   }
 
   function moveCursor(tile: GridPosition, dx: number, dy: number): GridPosition {
-    const y = Math.min(pattern.rows - 1, Math.max(0, tile.y + dy));
+    const y = Math.min(pattern.rows - 1, Math.max(0, tile.y + (flipped ? -dy : dy)));
     const x = y === tile.y ? tile.x : columnAt(displayX(tile) + 0.5, y, true) ?? 0;
-    return { x: Math.min(chartRow(pattern, y).stitches - 1, Math.max(0, x + dx)), y };
+    return { x: Math.min(chartRow(pattern, y).stitches - 1, Math.max(0, x + (flipped ? -dx : dx))), y };
   }
 
   function traceStroke(from: GridPosition, to: GridPosition, visit: (x: number, y: number) => void) {
@@ -188,8 +204,8 @@ export function makeGrid(elements: GridElements) {
     guide.hidden = !tile || !showRow;
     if (!tile) return;
     marker.style.setProperty('--x', String(displayX(tile)));
-    marker.style.setProperty('--y', String(tile.y));
-    guide.style.setProperty('--y', String(tile.y));
+    marker.style.setProperty('--y', String(orientY(tile.y)));
+    guide.style.setProperty('--y', String(orientY(tile.y)));
   }
 
   function reveal() {
@@ -215,7 +231,7 @@ export function makeGrid(elements: GridElements) {
       const to = y === start.y && start.leftToRight ? start.x : stitches;
       for (let x = from; x < to; x++) {
         const width = (pattern.shape === 'sphere' ? 2 : 1) * progressPixels;
-        overlay.fillRect(displayX({ x, y }) * width, y * progressPixels, width, progressPixels);
+        overlay.fillRect(displayX({ x, y }) * width, orientY(y) * progressPixels, width, progressPixels);
       }
     }
     for (let offset = 0; offset < progress.offset; offset++) updateStep(progress, offset, true);
@@ -227,7 +243,7 @@ export function makeGrid(elements: GridElements) {
     const horizontal = pattern.shape === 'sphere' ? 2 : 1;
     const width = horizontal * progressPixels;
     const x = displayX(tile) * width;
-    const y = tile.y * progressPixels;
+    const y = orientY(tile.y) * progressPixels;
     if (completed) {
       overlay.fillStyle = 'rgba(31,55,46,0.47)';
       overlay.fillRect(x, y, width, progressPixels);

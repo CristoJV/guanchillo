@@ -162,7 +162,7 @@ function refreshBoard() {
   rowsInput.valueAsNumber = rows;
   byId('cols', 'input').disabled = sphere;
   byId('cols', 'input').valueAsNumber = cols;
-  grid.drawPattern(pattern, progress.direction);
+  grid.drawPattern(pattern, progress.direction, mode === 'edit');
   updateGlobe();
   renderPalette();
   updateHistory();
@@ -174,7 +174,8 @@ function selectPattern(selected: Pattern, keepMode = false, initialProgress?: Pr
   pattern = selected;
   progress = initialProgress ?? sessions.get(pattern.id) ?? storage.progress(pattern);
   sessions.set(pattern.id, progress);
-  cursor = { x: 0, y: pattern.rows - 1 };
+  const y = pattern.rows - 1;
+  cursor = { x: pattern.shape === 'sphere' ? chartRow(pattern, y).stitches - 1 : 0, y };
   color = Math.min(1, pattern.palette.length - 1);
   undo.length = redo.length = 0;
   setTool('paint');
@@ -188,6 +189,7 @@ function selectPattern(selected: Pattern, keepMode = false, initialProgress?: Pr
 
 function setMode(nextMode: Mode) {
   finishGesture();
+  const changedMode = mode !== nextMode;
   mode = nextMode;
   workspace.dataset.mode = mode;
   const working = mode === 'work';
@@ -200,8 +202,8 @@ function setMode(nextMode: Mode) {
     'Design your next tapestry crochet project.');
   setText('grid-shortcuts', working ? 'Space to start or advance · Left arrow to go back' :
     'Arrow keys to move · Space to paint');
+  if (changedMode && pattern.shape === 'sphere') grid.drawPattern(pattern, progress.direction, !working);
   if (working) {
-    grid.drawPattern(pattern, progress.direction);
     refreshTracking();
   } else {
     grid.hideProgress();
@@ -770,7 +772,7 @@ byId('progress-form').addEventListener('submit', event => {
   sessions.set(pattern.id, progress);
   saveProgress();
   byId('progress-dialog', 'dialog').close();
-  grid.drawPattern(pattern, progress.direction);
+  grid.drawPattern(pattern, progress.direction, false);
   refreshTracking();
 });
 

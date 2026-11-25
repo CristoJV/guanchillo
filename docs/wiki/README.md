@@ -16,6 +16,8 @@ Choose **Sphere** under **New pattern**, then enter a multiple of three from 6 t
 
 Paint the stitches in the six chart sections to update the globe. The spaces between the sections are gaps in the projection. The labels at the right show each round and its stitch count. **X** is a single crochet, **V** spans the two stitches of an increase, and **Λ** marks a decrease. Zoom in to see these marks on larger charts.
 
+In **Design**, the chart matches the finished sphere, with the first round at the top. In **Crochet**, the chart turns 180° so you work from the first round at the bottom.
+
 When following a sphere, crochet in a continuous spiral. The current stitch display tells you when to increase, decrease or work into the magic ring. Changing the number of rounds resamples your colors to fit the new chart. [Supergurumi's rounded sphere guide](https://www.supergurumi.com/es/tejer-esferas-y-bolas-de-cualquier-tamano)
 
 ## Save or transfer your work
