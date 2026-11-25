@@ -3,15 +3,22 @@ import { chartRow, type Pattern } from './model.js';
 const turn = Math.PI * 2;
 const neutral = [233, 220, 194];
 
-export function makeGlobe(canvas: HTMLCanvasElement) {
-  const context = canvas.getContext('2d');
-  if (!context) return { show() {} };
+interface Ray {
+  index: number;
+  x: number;
+  y: number;
+  z: number;
+  light: number;
+}
 
-  const size = canvas.width;
+const meshes = new Map<number, Ray[]>();
+
+function sphereMesh(size: number): Ray[] {
+  const existing = meshes.get(size);
+  if (existing) return existing;
   const center = size / 2;
   const radius = center - 5;
-  const frame = context.createImageData(size, size);
-  const pixels: { index: number; x: number; y: number; z: number; light: number }[] = [];
+  const pixels: Ray[] = [];
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
       const x = (px + 0.5 - center) / radius;
@@ -23,6 +30,16 @@ export function makeGlobe(canvas: HTMLCanvasElement) {
       pixels.push({ index: 4 * (py * size + px), x, y, z, light });
     }
   }
+  meshes.set(size, pixels);
+  return pixels;
+}
+
+export function makeGlobe(canvas: HTMLCanvasElement) {
+  const context = canvas.getContext('2d');
+  if (!context) return { show() {} };
+
+  const size = canvas.width;
+  const frame = context.createImageData(size, size);
 
   let pattern: Pattern;
   let rows: ReturnType<typeof chartRow>[];
@@ -38,7 +55,7 @@ export function makeGlobe(canvas: HTMLCanvasElement) {
     const sinPitch = Math.sin(pitch);
     const cosYaw = Math.cos(yaw);
     const sinYaw = Math.sin(yaw);
-    for (const { index, x, y, z, light } of pixels) {
+    for (const { index, x, y, z, light } of sphereMesh(size)) {
       // Roll the chart texture by half a turn so the first round is at the top of the finished sphere.
       const chartX = -x;
       const chartY = -y;

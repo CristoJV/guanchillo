@@ -1,21 +1,15 @@
 import {
-  chartRow, counts, examplePattern, hasStarted, jumpToStitch, limits, makeColorGuide,
+  chartRow, copyTemplate, counts, examplePattern, hasStarted, jumpToStitch, limits, makeColorGuide,
   newPattern, newProgress, newSphere, deserializePattern, resizePattern, serializePattern, tileAt, totalSteps,
   type GridPosition, type Pattern, type Progress,
 } from './model.js';
-import { earthPattern } from './earth.js';
+import { getTemplates, makeCollection, type PatternTemplate } from './collection.js';
+import { byId } from './dom.js';
 import { makeGlobe } from './globe.js';
 import { makeGrid } from './grid.js';
+import { makeImageImporter } from './image-import.js';
 import { isSphereSize, sphereLayout, sphereSizes, stitchOperation } from './sphere.js';
 import { createStorage, type Mode } from './storage.js';
-
-function byId(id: string): HTMLElement;
-function byId<Tag extends keyof HTMLElementTagNameMap>(id: string, tag: Tag): HTMLElementTagNameMap[Tag];
-function byId(id: string, tag?: string): HTMLElement {
-  const element = document.getElementById(id);
-  if (!element || (tag && element.localName !== tag)) throw new Error('Unexpected or missing element #' + id);
-  return element;
-}
 
 const viewport = byId('viewport');
 const surface = byId('grid-surface');
@@ -73,6 +67,23 @@ let gesture: Stroke | Pan | null = null;
 let clickOrigin: GridPosition | null = null;
 const undo: Pattern[] = [];
 const redo: Pattern[] = [];
+const collection = makeCollection((template, action) => {
+  const existing = patterns.get(template.id);
+  if (existing?.id === pattern.id) {
+    setMode(action);
+  } else if (existing) {
+    selectPattern(existing, action);
+  } else {
+    const copy = structuredClone(template);
+    selectPattern(copy, action, newProgress(copy));
+  }
+  surface.focus({ preventScroll: true });
+});
+const imageImporter = makeImageImporter(imported => {
+  selectPattern(imported, 'edit', newProgress(imported));
+  status('Imported “' + imported.name + '” as a flat pattern.');
+  surface.focus({ preventScroll: true });
+});
 
 function savePreferences() {
   storage.savePreferences({ activeId: pattern.id, mode });
@@ -169,7 +180,7 @@ function refreshBoard() {
   refreshCursor();
 }
 
-function selectPattern(selected: Pattern, keepMode = false, initialProgress?: Progress) {
+function selectPattern(selected: Pattern, nextMode: Mode = 'edit', initialProgress?: Progress) {
   finishGesture();
   pattern = selected;
   progress = initialProgress ?? sessions.get(pattern.id) ?? storage.progress(pattern);
@@ -181,7 +192,7 @@ function selectPattern(selected: Pattern, keepMode = false, initialProgress?: Pr
   setTool('paint');
   if (initialProgress) savePattern();
   refreshBoard();
-  setMode(keepMode ? mode : 'edit');
+  setMode(nextMode);
   grid.zoom(0);
   viewport.scrollTop = viewport.scrollLeft = 0;
   if (mode === 'work') grid.reveal();
@@ -193,10 +204,23 @@ function setMode(nextMode: Mode) {
   mode = nextMode;
   workspace.dataset.mode = mode;
   const working = mode === 'work';
+  const browsing = mode === 'collection';
+  workspace.hidden = browsing;
+  byId('collection-view').hidden = !browsing;
+  byId('workbench-actions').hidden = browsing;
+  byId('workbench-footer').hidden = browsing;
+  byId('edit-mode').setAttribute('aria-pressed', String(mode === 'edit'));
+  byId('work-mode').setAttribute('aria-pressed', String(working));
+  byId('collection-mode').setAttribute('aria-pressed', String(browsing));
+  if (browsing) {
+    setText('mode-title', 'Pattern collection');
+    setText('mode-summary', 'Choose a template to edit or crochet.');
+    void collection.show();
+    savePreferences();
+    return;
+  }
   byId('edit-tools').hidden = byId('edit-details').hidden = working;
   byId('follow-panel').hidden = !working;
-  byId('edit-mode').setAttribute('aria-pressed', String(!working));
-  byId('work-mode').setAttribute('aria-pressed', String(working));
   setText('mode-title', working ? 'Follow pattern' : 'Pattern editor');
   setText('mode-summary', working ? 'Click a stitch to jump, or click beside the chart to advance.' :
     'Design your next tapestry crochet project.');
@@ -501,7 +525,7 @@ const toolShortcuts = new Map<string, Tool>([['p', 'paint'], ['e', 'erase'], ['h
 
 document.addEventListener('keydown', event => {
   const target = event.target;
-  if (event.defaultPrevented || event.isComposing || document.querySelector('dialog[open]') ||
+  if (mode === 'collection' || event.defaultPrevented || event.isComposing || document.querySelector('dialog[open]') ||
     !(target instanceof Element) || target.closest('input, select, textarea, [contenteditable]')) return;
 
   if (mode === 'work') {
@@ -607,7 +631,7 @@ function renderLibrary() {
     if (entry.id === pattern.id) open.setAttribute('aria-current', 'true');
     open.addEventListener('click', () => {
       byId('library-dialog', 'dialog').close();
-      if (entry.id !== pattern.id) selectPattern(entry, true);
+      if (entry.id !== pattern.id || mode === 'collection') selectPattern(entry, mode === 'work' ? 'work' : 'edit');
       if (mode === 'work') surface.focus({ preventScroll: true });
     });
     const remove = document.createElement('button');
@@ -624,10 +648,10 @@ function renderLibrary() {
       if (entry.id === pattern.id) {
         const remaining = patterns.values().next().value;
         if (remaining) {
-          selectPattern(remaining, true);
+          selectPattern(remaining, mode);
         } else {
           const blank = newPattern();
-          selectPattern(blank, true, newProgress(blank));
+          selectPattern(blank, mode, newProgress(blank));
         }
       }
       renderLibrary();
@@ -644,7 +668,7 @@ async function importFile(file: File | undefined) {
   if (file.size > limits.file) throw new Error('The file exceeds 1 MB.');
   const imported = deserializePattern(await file.text());
   if (byId('library-dialog', 'dialog').open) byId('library-dialog', 'dialog').close();
-  selectPattern(imported.pattern, true, imported.progress);
+  selectPattern(imported.pattern, mode === 'work' ? 'work' : 'edit', imported.progress);
   if (mode === 'work') surface.focus({ preventScroll: true });
   status('Opened “' + imported.pattern.name + '”.');
 }
@@ -684,11 +708,32 @@ nameInput.addEventListener('change', () => {
 const newShape = byId('new-shape', 'select');
 const newTemplate = byId('new-template', 'select');
 const newRounds = byId('new-rounds', 'input');
+const newRows = byId('new-rows', 'input');
+const newCols = byId('new-cols', 'input');
 const newName = byId('new-name', 'input');
 const patternDialog = byId('pattern-dialog', 'dialog');
+let creationTemplates: PatternTemplate[] = [];
+let suggestedName = '';
 
-function sphereDraft(rounds: number, name: string): Pattern {
-  return newTemplate.value === 'earth' ? earthPattern(rounds, name) : newSphere(rounds, name);
+function selectedTemplate(): Pattern | undefined {
+  return creationTemplates.find(entry => entry.key === newTemplate.value)?.pattern;
+}
+
+function refreshTemplateOptions() {
+  const sphere = newShape.value === 'sphere';
+  const previous = newTemplate.value;
+  const matching = creationTemplates.filter(({ pattern }) => (pattern.shape === 'sphere') === sphere);
+  newTemplate.replaceChildren(new Option('Blank', 'blank'), ...matching.map(({ pattern, key }) => new Option(pattern.name, key)));
+  if (matching.some(({ key }) => key === previous)) newTemplate.value = previous;
+}
+
+function patternDraft(name: string): Pattern {
+  const sphere = newShape.value === 'sphere';
+  const rows = sphere ? newRounds.valueAsNumber : newRows.valueAsNumber;
+  const cols = newCols.valueAsNumber;
+  const template = selectedTemplate();
+  if (template) return copyTemplate(template, rows, cols, name);
+  return sphere ? newSphere(rows, name) : newPattern(rows, cols, name);
 }
 
 function refreshCreation() {
@@ -696,8 +741,8 @@ function refreshCreation() {
   patternDialog.dataset.shape = newShape.value;
   byId('new-flat-fields').hidden = sphere;
   byId('new-sphere-fields').hidden = !sphere;
-  byId('new-rows', 'input').disabled = sphere;
-  byId('new-cols', 'input').disabled = sphere;
+  newRows.disabled = sphere;
+  newCols.disabled = sphere;
   newRounds.disabled = !sphere;
   const rounds = newRounds.valueAsNumber;
   const showPreview = sphere && isSphereSize(rounds);
@@ -708,15 +753,27 @@ function refreshCreation() {
   }
   const { goreWidth, stitches } = sphereLayout(rounds);
   setText('sphere-summary', format(goreWidth * 6) + ' stitches at widest · ' + format(stitches) + ' total');
-  createGlobe.show(sphereDraft(rounds, newName.value));
+  createGlobe.show(patternDraft(newName.value));
 }
 
-newShape.addEventListener('change', refreshCreation);
-newRounds.addEventListener('input', refreshCreation);
-newTemplate.addEventListener('change', () => {
-  if (newTemplate.value === 'earth' && !newName.value.trim()) newName.value = 'Earth';
+function applyTemplateChoice() {
+  const chosen = selectedTemplate();
+  if (!newName.value.trim() || newName.value === suggestedName) newName.value = chosen?.name ?? '';
+  suggestedName = chosen?.name ?? '';
+  if (chosen?.shape === 'sphere') newRounds.valueAsNumber = chosen.rows;
+  else if (chosen) {
+    newRows.valueAsNumber = chosen.rows;
+    newCols.valueAsNumber = chosen.cols;
+  }
   refreshCreation();
+}
+
+newShape.addEventListener('change', () => {
+  refreshTemplateOptions();
+  applyTemplateChoice();
 });
+newRounds.addEventListener('input', refreshCreation);
+newTemplate.addEventListener('change', applyTemplateChoice);
 
 byId('create-form', 'form').addEventListener('submit', event => {
   event.preventDefault();
@@ -726,10 +783,9 @@ byId('create-form', 'form').addEventListener('submit', event => {
     newName.reportValidity();
     return;
   }
-  const fresh = newShape.value === 'sphere' ? sphereDraft(newRounds.valueAsNumber, name) :
-    newPattern(byId('new-rows', 'input').valueAsNumber, byId('new-cols', 'input').valueAsNumber, name);
+  const fresh = patternDraft(name);
   patternDialog.close();
-  selectPattern(fresh, false, newProgress(fresh));
+  selectPattern(fresh, 'edit', newProgress(fresh));
   status('Created “' + fresh.name + '”.');
 });
 
@@ -776,16 +832,32 @@ byId('progress-form').addEventListener('submit', event => {
   refreshTracking();
 });
 
-byId('new-pattern').addEventListener('click', () => {
+byId('new-pattern').addEventListener('click', async () => {
   byId('create-form', 'form').reset();
+  suggestedName = '';
+  newTemplate.value = 'blank';
+  refreshTemplateOptions();
   refreshCreation();
   patternDialog.showModal();
+  const templateStatus = byId('new-template-status');
+  templateStatus.hidden = creationTemplates.length > 0;
+  templateStatus.textContent = 'Loading templates…';
+  try {
+    creationTemplates = await getTemplates();
+    refreshTemplateOptions();
+    templateStatus.hidden = true;
+  } catch {
+    templateStatus.hidden = false;
+    templateStatus.textContent = 'Templates could not be loaded.';
+  }
 });
 byId('library-open').addEventListener('click', () => {
   renderLibrary();
   byId('library-dialog', 'dialog').showModal();
 });
 byId('edit-mode').addEventListener('click', () => setMode('edit'));
+byId('collection-mode').addEventListener('click', () => setMode('collection'));
+byId('image-open').addEventListener('click', imageImporter.open);
 byId('work-mode').addEventListener('click', () => {
   setMode('work');
   surface.focus({ preventScroll: true });
@@ -831,8 +903,8 @@ for (const [id, ratio] of [['zoom-in', 1.25], ['zoom-out', 0.8], ['zoom-fit', 0]
 
 const initial = (preferences && patterns.get(preferences.activeId)) ?? patterns.values().next().value;
 if (initial) {
-  selectPattern(initial, true);
+  selectPattern(initial, mode);
 } else {
   const example = examplePattern();
-  selectPattern(example, true, newProgress(example));
+  selectPattern(example, mode, newProgress(example));
 }

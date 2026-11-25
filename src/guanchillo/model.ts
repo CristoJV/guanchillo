@@ -161,19 +161,28 @@ export function parsePattern(value: unknown): PatternData & { id: string | null 
   return { version, id, name, rows, cols, palette: colors, cells: [...cells], ...(shape ? { shape } : {}) };
 }
 
-export function resizePattern(pattern: Pattern, rows: number, cols: number): Pattern {
-  if (pattern.shape === 'sphere') {
-    const layout = sphereLayout(rows);
-    const cells: number[] = [];
-    for (const round of [...layout.rounds].reverse()) {
-      const sourceY = Math.floor((rows - round.number + 0.5) * pattern.rows / rows);
-      const source = chartRow(pattern, sourceY);
-      for (let stitch = 0; stitch < round.stitches; stitch++) {
-        cells.push(pattern.cells[source.start + Math.floor((stitch + 0.5) * source.stitches / round.stitches)]);
-      }
+function resamplePattern(pattern: Pattern, rows: number, cols: number): Pattern {
+  const result: Pattern = {
+    ...pattern, rows, cols: pattern.shape === 'sphere' ? sphereLayout(rows).goreWidth * gores : cols,
+    cells: [],
+  };
+  for (let y = 0; y < rows; y++) {
+    const source = chartRow(pattern, Math.floor((y + 0.5) * pattern.rows / rows));
+    const { stitches } = chartRow(result, y);
+    for (let x = 0; x < stitches; x++) {
+      const column = Math.floor((x + 0.5) * source.stitches / stitches);
+      result.cells.push(pattern.cells[source.start + column]);
     }
-    return { ...pattern, rows, cols: layout.goreWidth * gores, cells };
   }
+  return result;
+}
+
+export function copyTemplate(pattern: Pattern, rows: number, cols: number, name: string): Pattern {
+  return { ...resamplePattern(pattern, rows, cols), id: newPatternId(), name, palette: structuredClone(pattern.palette) };
+}
+
+export function resizePattern(pattern: Pattern, rows: number, cols: number): Pattern {
+  if (pattern.shape === 'sphere') return resamplePattern(pattern, rows, cols);
   const cells = Array<number>(rows * cols).fill(-1);
   for (let row = 1; row <= Math.min(rows, pattern.rows); row++) {
     for (let col = 0; col < Math.min(cols, pattern.cols); col++) {

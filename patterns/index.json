@@ -1,0 +1,28 @@
+{
+  "space": [
+    "earth",
+    "moon",
+    "mercury",
+    "venus",
+    "mars",
+    "jupiter",
+    "saturn",
+    "uranus",
+    "neptune"
+  ],
+  "holiday": [
+    "nordic-bauble",
+    "evergreen-bauble",
+    "peppermint-bauble",
+    "fir-tree",
+    "snowflake",
+    "holiday-gift",
+    "gingerbread"
+  ],
+  "pixel": [
+    "blocky-explorer",
+    "moss-monster",
+    "pink-pig",
+    "barnyard-chicken"
+  ]
+}

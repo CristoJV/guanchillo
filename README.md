@@ -1,6 +1,6 @@
 # Guanchillo
 
-Design flat or spherical tapestry crochet patterns and follow them stitch by stitch. Guanchillo runs in the browser and supports versioned JSON files for sharing patterns and crochet progress.
+Design flat or spherical tapestry crochet patterns and follow them stitch by stitch. Import a local image into a flat chart or start from a template in the collection. Guanchillo runs in the browser and supports versioned JSON files for sharing patterns and crochet progress.
 
 ## Run locally
 
@@ -27,4 +27,4 @@ An `.mjs` file is a JavaScript ES module. It uses standard `import` and `export`
 | Static hosting | [Deployment](docs/technical/deployment.md) |
 | MVP scope | [Delivery plan](docs/plans/001-mvp.md) |
 | Implemented architecture decisions | [ADR 001](docs/adrs/001-static-architecture.md) |
-| Proposed image import | [RFC 001](docs/rfcs/001-import-image.md) |
+| Image import decisions and proposals | [RFC 001](docs/rfcs/001-import-image.md) |

@@ -10,9 +10,22 @@
 
 Zoom in to work on details. Select **Pan** and drag to move around. **Fit to view** restores the overview.
 
+## Import a flat pattern from an image
+
+1. Select **Import image** and choose a local PNG, JPEG or WebP file.
+2. Set the number of **Columns** and **Rows** in stitches. The importer suggests a starting size based on the image's proportions.
+3. Pick **Automatic colors** and set the maximum, or pick **My colors** to add and adjust the exact yarn colors you plan to use.
+4. Check the stitch preview, then select **Create pattern** to open it in **Design**. Transparent pixels become unassigned stitches.
+
+## Browse the pattern collection
+
+Open **Collection** to browse the Solar System, Christmas and Pixel Faces templates. The cards show a flat chart or a rotatable sphere. Choose **Edit** to customize a copy or **Crochet** to start following it. Returning to the same card reopens your local copy, including any progress.
+
+For a separate copy at a different size, use **New pattern**, choose the shape and select a template. Earth uses eight colors. The planetary templates depict spherical surfaces with colored stitching. [NASA's planet guide](https://science.nasa.gov/solar-system/planets/)
+
 ## Design a sphere
 
-Choose **Sphere** under **New pattern**, then enter a multiple of three from 6 to 126 rounds. Choose **Earth** to start with the supplied globe chart by @druidanu adapted to the rounded spiral. The 3D preview starts with the first round at the top of the finished sphere. Drag it or focus it and use the arrow keys to rotate.
+Choose **Sphere** under **New pattern**, then enter a multiple of three from 6 to 126 rounds. The 3D preview starts with the first round at the top of the finished sphere. Drag it or focus it and use the arrow keys to rotate.
 
 Paint the stitches in the six chart sections to update the globe. The spaces between the sections are gaps in the projection. The labels at the right show each round and its stitch count. **X** is a single crochet, **V** spans the two stitches of an increase, and **Λ** marks a decrease. Zoom in to see these marks on larger charts.
 

@@ -1,6 +1,6 @@
 import { newProgress, parsePattern, parseProgress, type Pattern, type Progress } from './model.js';
 
-export type Mode = 'edit' | 'work';
+export type Mode = 'edit' | 'work' | 'collection';
 
 interface Preferences {
   activeId: string;
@@ -67,7 +67,7 @@ export function createStorage(onError: (message: string) => void) {
       const value = read(preferencesKey);
       if (typeof value !== 'object' || !value || !('activeId' in value) || !('mode' in value)) return null;
       const { activeId, mode } = value;
-      return typeof activeId === 'string' && (mode === 'edit' || mode === 'work') ? { activeId, mode } : null;
+      return typeof activeId === 'string' && (mode === 'edit' || mode === 'work' || mode === 'collection') ? { activeId, mode } : null;
     },
     savePreferences: (preferences: Preferences) => write(preferencesKey, preferences),
     removePattern(id: string) {

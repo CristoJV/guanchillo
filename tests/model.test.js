@@ -1,11 +1,15 @@
 import assert from 'node:assert/strict';
+import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
-import { earthPattern } from '../dist/earth.js';
+import { quantizeImage } from '../dist/image-pattern.js';
 import {
-  chartRow, deserializePattern, hasStarted, jumpToStitch, makeColorGuide, newPattern, newProgress, newSphere,
-  resizePattern, serializePattern, tileAt, totalSteps,
+  chartRow, copyTemplate, deserializePattern, hasStarted, jumpToStitch, makeColorGuide, newPattern, newProgress, newSphere,
+  parsePattern, resizePattern, serializePattern, tileAt, totalSteps,
 } from '../dist/model.js';
 import { projectedStitch, projectedX, specialStitches, sphereLayout, stitchOperation } from '../dist/sphere.js';
+
+const templates = new URL('../dist/patterns/', import.meta.url);
+const readTemplate = key => JSON.parse(readFileSync(new URL(key + '.json', templates), 'utf8'));
 
 test('the rounded spiral reproduces the 18-round counts and shaping offsets', () => {
   const { rounds } = sphereLayout(18);
@@ -57,11 +61,11 @@ test('the spiral visits every actual stitch without alternating or visiting proj
 });
 
 test('JSON preserves sphere colors and progress and still accepts a flat version 1 file', () => {
-  const earth = earthPattern();
+  const earth = parsePattern(readTemplate('earth'));
   const resized = resizePattern(earth, 24, earth.cols);
   assert.equal(resized.cols, 48);
   assert.equal(resized.cells.length, 816);
-  assert(resized.cells.every(value => value >= 0 && value < 3));
+  assert(resized.cells.every(value => value >= 0 && value < earth.palette.length));
   const { stitches } = chartRow(resized, resized.rows - 4);
   const progress = { ...newProgress(resized, { row: 4, col: stitches - 1 }), offset: 36 };
   const restored = deserializePattern(serializePattern(resized, progress));
@@ -126,4 +130,55 @@ test('saved progress distinguishes Start from zero completed stitches and reads 
   assert.equal(hasStarted(active), true);
   assert.equal(hasStarted({ ...ready, offset: 1 }), true);
   assert.throws(() => deserializePattern(serializePattern(pattern, { ...ready, started: 'yes' })), /saved progress/);
+});
+
+test('image quantization respects the color budget and keeps transparent stitches unassigned', () => {
+  const pixels = new Uint8ClampedArray([255, 0, 0, 255, 255, 0, 0, 255, 0, 0, 255, 255, 0, 255, 0, 0]);
+  const automatic = quantizeImage(pixels, 2);
+  assert.deepEqual(automatic.palette.map(({ hex }) => hex).sort(), ['#0000ff', '#ff0000']);
+  assert.equal(automatic.cells[0], automatic.cells[1]);
+  assert.notEqual(automatic.cells[0], automatic.cells[2]);
+  assert.equal(automatic.cells[3], -1);
+  const single = quantizeImage(pixels, 1);
+  assert.equal(single.palette[0].hex, '#aa0055');
+  assert.deepEqual(single.cells, [0, 0, 0, -1]);
+  assert.deepEqual(quantizeImage(new Uint8ClampedArray([255, 4, 6, 1]), 4).cells, [-1]);
+});
+
+test('a supplied color palette preserves its exact colors and order', () => {
+  const pixels = new Uint8ClampedArray([205, 10, 20, 255, 5, 30, 250, 255]);
+  const chosen = ['#0000ff', '#ff0000', '#ffffff'];
+  const pattern = quantizeImage(pixels, chosen);
+  assert.deepEqual(pattern.palette.map(({ hex }) => hex), chosen);
+  assert.deepEqual(pattern.cells, [1, 0]);
+  assert.throws(() => quantizeImage(pixels, []), /between 1 and 24 colors/);
+});
+
+test('the public template index contains valid spherical and flat pattern files', () => {
+  const groups = readTemplate('index');
+  assert.deepEqual(groups.space, ['earth', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune']);
+  assert.equal(groups.holiday.length, 7);
+  assert.equal(groups.pixel.length, 4);
+  const keys = Object.values(groups).flat();
+  assert.deepEqual(readdirSync(templates).sort(), [...keys, 'index'].map(key => key + '.json').sort());
+  for (const key of keys) {
+    const pattern = parsePattern(readTemplate(key));
+    assert.equal(pattern.id, 'guanchillo-template-' + key);
+    assert.equal(deserializePattern(serializePattern(pattern)).pattern.cells.length, pattern.cells.length);
+    if (groups.space.includes(key)) assert.equal(pattern.shape, 'sphere');
+    if (groups.pixel.includes(key)) assert.equal(pattern.shape, undefined);
+  }
+  assert.equal(new Set(readTemplate('earth').cells).size, 8);
+});
+
+test('resizing a template preserves the source and creates a separate pattern', () => {
+  const original = readTemplate('snowflake');
+  const copy = copyTemplate(original, 12, 18, 'My snowflake');
+  assert.notEqual(copy.id, original.id);
+  assert.equal(copy.cells.length, 216);
+  assert.equal(copy.name, 'My snowflake');
+  assert.deepEqual(copy.palette, original.palette);
+  copy.palette[0].name = 'Blue';
+  assert.notEqual(copy.palette[0].name, original.palette[0].name);
+  assert.equal(original.cells.length, 225);
 });

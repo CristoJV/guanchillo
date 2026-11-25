@@ -1,6 +1,6 @@
 # RFC 001 · Generate a pattern from an image
 
-**Status** · Pending review.
+**Status** · Implemented for flat charts. Cropping and aspect ratio controls remain proposals.
 
 ## Proposed workflow
 
