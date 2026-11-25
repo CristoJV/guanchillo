@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#faf8f3">
+  <meta name="description" content="Design tapestry crochet patterns and follow them stitch by stitch.">
+  <title>Ganchillo · Tapestry crochet patterns</title>
+  <link rel="icon" href="favicon.svg">
+  <link rel="stylesheet" href="styles.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <svg class="icon-definitions" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <defs>
+      <symbol id="yarn" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="8"></circle><path d="M4.5 7.2 15.5 17.7M7.2 4.1l11.5 11.1M3 11.1l8 7.9m1.8-15.8-3.6 3.5m8-1.3-5.5 5.1m7.2-1.7-4.2 4.1M11 19c3.1 2.7 6-.4 8.8-.4H22"></path>
+      </symbol>
+      <symbol id="pencil" viewBox="0 0 24 24"><path d="m15 5 4 4M4 20l4.5-1 11-11a2.8 2.8 0 0 0-4-4l-11 11L4 20Z"></path></symbol>
+      <symbol id="eraser" viewBox="0 0 24 24"><path d="m14 18 6.5-7a1.8 1.8 0 0 0 0-2.5l-4-4a1.8 1.8 0 0 0-2.5 0l-9.5 10a1.8 1.8 0 0 0 0 2.5L8 20h12m-11-9 7 7"></path></symbol>
+      <symbol id="hand" viewBox="0 0 24 24"><path d="M8 13V6a1.5 1.5 0 0 1 3 0v5-7a1.5 1.5 0 0 1 3 0v7-5a1.5 1.5 0 0 1 3 0v6-3a1.5 1.5 0 0 1 3 0v6a6 6 0 0 1-6 6h-1c-2.2 0-3.6-.8-5-2.5L4 14a1.7 1.7 0 0 1 2.4-2.4L8 13Z"></path></symbol>
+      <symbol id="undo" viewBox="0 0 24 24"><path d="M9 5 4 10l5 5m-5-5h10a5 5 0 0 1 0 10h-3"></path></symbol>
+      <symbol id="redo" viewBox="0 0 24 24"><path d="m15 5 5 5-5 5m5-5H10a5 5 0 0 0 0 10h3"></path></symbol>
+      <symbol id="folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z"></path></symbol>
+      <symbol id="import" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4m-12 4v5h16v-5"></path></symbol>
+      <symbol id="export" viewBox="0 0 24 24"><path d="M12 15V3m-4 4 4-4 4 4m-12 8v5h16v-5"></path></symbol>
+      <symbol id="grid-icon" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"></rect><path d="M4 12h16M12 4v16"></path></symbol>
+      <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></symbol>
+      <symbol id="minus" viewBox="0 0 24 24"><path d="M5 12h14"></path></symbol>
+      <symbol id="fit" viewBox="0 0 24 24"><path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5"></path></symbol>
+      <symbol id="settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"></path></symbol>
+      <symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></symbol>
+      <symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></symbol>
+      <symbol id="trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5m4-5v5"></path></symbol>
+    </defs>
+  </svg>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="./" aria-label="Ganchillo home">
+        <span class="brand-mark"><svg class="icon"><use href="#yarn"></use></svg></span>
+        <span>Ganchillo</span>
+      </a>
+      <nav class="mode-switch" aria-label="Workspace mode">
+        <button type="button" id="edit-mode" aria-pressed="true"><svg class="icon"><use href="#pencil"></use></svg> Design</button>
+        <button type="button" id="work-mode" aria-pressed="false"><svg class="icon"><use href="#yarn"></use></svg> Crochet</button>
+      </nav>
+      <div class="header-actions">
+        <button class="button subtle" id="library-open" type="button"><svg class="icon"><use href="#folder"></use></svg> My patterns</button>
+        <button class="button outline header-import" id="import-open" type="button"><svg class="icon"><use href="#import"></use></svg> Import</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="intro">
+      <div>
+        <h1 id="mode-title">Pattern editor</h1>
+        <p id="mode-summary">Design your next tapestry crochet project.</p>
+      </div>
+      <button class="button primary" id="new-pattern" type="button"><svg class="icon"><use href="#plus"></use></svg> New pattern</button>
+    </div>
+    <p class="warning" id="storage-warning" role="alert" hidden></p>
+
+    <div id="workspace" class="workspace" data-mode="edit">
+      <aside id="edit-tools" class="panel tools-panel" aria-label="Editing tools">
+        <section>
+          <h2>Tools</h2>
+          <div class="tool-list">
+            <button type="button" data-tool="paint" aria-pressed="true"><svg class="icon"><use href="#pencil"></use></svg> Pencil <kbd>P</kbd></button>
+            <button type="button" data-tool="erase" aria-pressed="false"><svg class="icon"><use href="#eraser"></use></svg> Eraser <kbd>E</kbd></button>
+            <button type="button" data-tool="pan" aria-pressed="false"><svg class="icon"><use href="#hand"></use></svg> Pan <kbd>H</kbd></button>
+          </div>
+          <div class="history">
+            <button class="button outline" id="undo-action" type="button" aria-label="Undo" title="Undo (Ctrl or ⌘ + Z)"><svg class="icon"><use href="#undo"></use></svg></button>
+            <button class="button outline" id="redo-action" type="button" aria-label="Redo" title="Redo (Ctrl or ⌘ + Shift + Z)"><svg class="icon"><use href="#redo"></use></svg></button>
+          </div>
+        </section>
+        <section class="dimensions">
+          <h2>Grid</h2>
+          <form id="resize-form">
+            <div class="field-grid">
+              <label>Rows <input id="rows" type="number" min="1" max="256" required></label>
+              <label>Columns <input id="cols" type="number" min="1" max="256" required></label>
+            </div>
+            <button class="button outline full" type="submit">Apply size</button>
+          </form>
+        </section>
+      </aside>
+
+      <section class="panel board-panel" aria-labelledby="board-title">
+        <header class="board-header">
+          <div>
+            <h2 id="board-title">Lava Diamond</h2>
+            <p id="board-meta"></p>
+          </div>
+          <div class="zoom" role="group" aria-label="Grid zoom">
+            <button type="button" class="icon-button" id="zoom-out" aria-label="Zoom out" title="Zoom out"><svg class="icon"><use href="#minus"></use></svg></button>
+            <output id="zoom-value" aria-label="Zoom level">100%</output>
+            <button type="button" class="icon-button" id="zoom-in" aria-label="Zoom in" title="Zoom in"><svg class="icon"><use href="#plus"></use></svg></button>
+            <button type="button" class="icon-button zoom-fit" id="zoom-fit" aria-label="Fit to view" title="Fit to view"><svg class="icon"><use href="#fit"></use></svg></button>
+          </div>
+        </header>
+        <div class="viewport" id="viewport">
+          <div class="grid-content">
+            <div class="grid-shell" id="grid-shell">
+              <div class="ruler ruler-top" id="ruler-top" aria-hidden="true"></div>
+              <div class="ruler ruler-left" id="ruler-left" aria-hidden="true"></div>
+              <div id="grid-surface" class="grid-surface" role="group" tabindex="0" aria-label="Pattern grid" aria-describedby="grid-shortcuts">
+                <canvas id="grid-colors" aria-hidden="true"></canvas>
+                <canvas id="grid-done" aria-hidden="true" hidden></canvas>
+                <span class="grid-lines" aria-hidden="true"></span>
+                <span id="guide-row" class="guide-row" aria-hidden="true" hidden></span>
+                <span id="grid-marker" class="grid-marker" aria-hidden="true" hidden></span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <footer class="board-footer">
+          <span id="grid-shortcuts" class="grid-shortcuts">Arrow keys to move · Space to paint</span>
+          <span id="grid-cursor" class="grid-cursor" aria-live="polite"></span>
+        </footer>
+      </section>
+
+      <aside id="edit-details" class="panel details-panel" aria-label="Pattern and palette">
+        <section>
+          <h2>My pattern</h2>
+          <label class="name-field">Name <input id="pattern-name" type="text" maxlength="80" required></label>
+          <div class="pattern-actions">
+            <button class="button save-button" id="save-pattern" type="button"><svg class="icon"><use href="#check"></use></svg> Save</button>
+            <button class="button outline export-button" id="export-pattern" type="button" aria-label="Export pattern" title="Export pattern and progress as JSON"><svg class="icon"><use href="#export"></use></svg></button>
+          </div>
+        </section>
+        <section>
+          <div class="section-heading">
+            <h2>Color palette</h2>
+            <button class="icon-button add-color" id="color-add" type="button" aria-label="Add color" title="Add color"><svg class="icon"><use href="#plus"></use></svg></button>
+          </div>
+          <div id="palette" class="palette" aria-label="Pattern colors"></div>
+          <div class="palette-footer"><span>Unassigned</span><span id="empty-count"></span></div>
+        </section>
+      </aside>
+
+      <aside id="follow-panel" class="panel follow-panel" aria-label="Crochet progress" hidden>
+        <section>
+          <h2>Your progress</h2>
+          <div class="progress-summary"><strong id="percent">0%</strong><span id="done-count"></span></div>
+          <progress id="progress-bar" aria-label="Crochet progress" value="0" max="100"></progress>
+        </section>
+        <section>
+          <h2 id="current-heading">Current stitch</h2>
+          <dl class="coordinates">
+            <div><dt>Row</dt><dd id="current-row">—</dd></div>
+            <div><dt>Stitch</dt><dd id="current-point">—</dd></div>
+          </dl>
+          <div class="current-color"><span class="swatch" id="current-swatch"></span><div><strong id="current-color">—</strong><p id="current-run"></p></div></div>
+          <p class="direction" id="current-direction"></p>
+        </section>
+        <section class="follow-actions">
+          <button class="button primary full" id="next-stitch" type="button">Next stitch</button>
+          <button class="button outline full" id="previous-stitch" type="button">Previous stitch</button>
+          <button class="button subtle full" id="progress-settings" type="button"><svg class="icon"><use href="#settings"></use></svg> Set starting point</button>
+        </section>
+      </aside>
+    </div>
+    <footer class="page-footer"><span id="app-status" role="status">Patterns are saved in this browser.</span></footer>
+  </main>
+
+  <dialog id="pattern-dialog" aria-labelledby="pattern-dialog-title">
+    <form id="create-form">
+      <div class="dialog-heading"><h2 id="pattern-dialog-title">New pattern</h2><button type="button" class="icon-button" data-close="pattern-dialog" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
+      <label>Name <input id="new-name" type="text" maxlength="80" required autofocus></label>
+      <div class="field-grid">
+        <label>Rows <input id="new-rows" type="number" min="1" max="256" value="24" required></label>
+        <label>Columns <input id="new-cols" type="number" min="1" max="256" value="24" required></label>
+      </div>
+      <div class="dialog-actions"><button class="button primary" type="submit">Create pattern</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="library-dialog" aria-labelledby="library-title">
+    <div class="dialog-heading"><h2 id="library-title">My patterns</h2><button type="button" class="icon-button" data-close="library-dialog" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
+    <ul id="library-list" class="library-list"></ul>
+    <div class="dialog-actions"><button class="button outline" id="library-import" type="button"><svg class="icon"><use href="#import"></use></svg> Import JSON</button></div>
+  </dialog>
+
+  <dialog id="color-dialog" aria-labelledby="color-dialog-title">
+    <form id="color-form">
+      <div class="dialog-heading"><h2 id="color-dialog-title">Add color</h2><button type="button" class="icon-button" data-close="color-dialog" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
+      <label>Color name <input id="color-name" type="text" maxlength="80" required autofocus></label>
+      <label class="color-field">Swatch <input id="color-value" type="color" value="#739a8c"></label>
+      <p id="color-remove-note" hidden>Removing this color leaves its stitches unassigned.</p>
+      <div class="dialog-actions"><button class="button danger" id="color-delete" type="button" hidden>Remove color</button><button class="button primary" type="submit">Save color</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="progress-dialog" aria-labelledby="progress-title">
+    <form id="progress-form">
+      <div class="dialog-heading"><h2 id="progress-title">Set starting point</h2><button type="button" class="icon-button" data-close="progress-dialog" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
+      <p>Count rows from the bottom and columns from the left.</p>
+      <div class="field-grid">
+        <label>Starting row <input id="start-row" type="number" min="1" required autofocus></label>
+        <label>Starting column <input id="start-col" type="number" min="1" required></label>
+      </div>
+      <label>Starting direction
+        <select id="start-direction"><option value="rtl">Right to left</option><option value="ltr">Left to right</option></select>
+      </label>
+      <label class="check-field"><input id="start-alternate" type="checkbox"> Alternate direction on each row</label>
+      <p id="progress-reset-note" hidden>Applying the starting point resets your stitch count.</p>
+      <div class="dialog-actions"><button class="button primary" type="submit">Apply starting point</button></div>
+    </form>
+  </dialog>
+
+  <input id="file-input" type="file" accept=".json,application/json" hidden>
+</body>
+</html>
