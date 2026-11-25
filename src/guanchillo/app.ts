@@ -1,6 +1,6 @@
 import {
-  chartRow, colorRun, counts, examplePattern, limits, newPattern, newProgress, newSphere,
-  deserializePattern, resizePattern, serializePattern, tileAt, totalSteps,
+  chartRow, counts, examplePattern, hasStarted, jumpToStitch, limits, makeColorGuide,
+  newPattern, newProgress, newSphere, deserializePattern, resizePattern, serializePattern, tileAt, totalSteps,
   type GridPosition, type Pattern, type Progress,
 } from './model.js';
 import { earthPattern } from './earth.js';
@@ -24,6 +24,7 @@ const palette = byId('palette');
 const cursorText = byId('grid-cursor');
 const fileInput = byId('file-input', 'input');
 const nameInput = byId('pattern-name', 'input');
+const nextStitch = byId('next-stitch', 'button');
 const editorGlobe = makeGlobe(byId('editor-globe', 'canvas'));
 const createGlobe = makeGlobe(byId('create-globe', 'canvas'));
 const number = new Intl.NumberFormat('en');
@@ -62,6 +63,7 @@ interface Pan extends GridPosition {
 }
 let pattern: Pattern;
 let progress: Progress;
+let colorGuide: ReturnType<typeof makeColorGuide>;
 let mode: Mode = preferences?.mode ?? 'edit';
 let tool: Tool = 'paint';
 let color = 0;
@@ -194,14 +196,13 @@ function setMode(nextMode: Mode) {
   byId('edit-mode').setAttribute('aria-pressed', String(!working));
   byId('work-mode').setAttribute('aria-pressed', String(working));
   setText('mode-title', working ? 'Follow pattern' : 'Pattern editor');
-  setText('mode-summary', working ? 'Click the grid or press Space to advance.' :
+  setText('mode-summary', working ? 'Click a stitch to jump, or click beside the chart to advance.' :
     'Design your next tapestry crochet project.');
-  setText('grid-shortcuts', working ? 'Space to advance · Left arrow to go back' :
+  setText('grid-shortcuts', working ? 'Space to start or advance · Left arrow to go back' :
     'Arrow keys to move · Space to paint');
   if (working) {
     grid.drawPattern(pattern, progress.direction);
-    grid.setupProgress(progress);
-    renderProgress();
+    refreshTracking();
   } else {
     grid.hideProgress();
     refreshCursor();
@@ -247,7 +248,7 @@ function approveResize(rows: number, cols: number) {
   if (rows === pattern.rows && cols === pattern.cols) return true;
   const defaultStart = newProgress(pattern);
   const changedStart = (['row', 'col', 'direction', 'alternate'] as const).some(key => progress[key] !== defaultStart[key]);
-  if (progress.offset || changedStart) {
+  if (hasStarted(progress) || changedStart) {
     return window.confirm('Resizing will reset your progress and starting point. Continue?');
   }
   if (rows < pattern.rows || cols < pattern.cols) {
@@ -268,6 +269,7 @@ function stepHistory(from: Pattern[], to: Pattern[]) {
 
 function refreshCursor() {
   if (!pattern || mode !== 'edit') return;
+  cursorText.classList.remove('is-color-change');
   const focused = document.activeElement === surface;
   if (focused) {
     const { x, y } = cursor;
@@ -304,12 +306,35 @@ function sphereOperation(row: number, point: number): string {
   return operations[stitchOperation(round, point)];
 }
 
+function refreshTracking() {
+  colorGuide = makeColorGuide(pattern, progress);
+  grid.setupProgress(progress);
+  renderProgress();
+}
+
 function renderProgress() {
   const total = totalSteps(pattern, progress);
   const ratio = progress.offset / total;
   const current = tileAt(pattern, progress, progress.offset);
   const entry = current ? pattern.palette[pattern.cells[current.index]] : null;
-  const run = current ? colorRun(pattern, progress) : 0;
+  const started = hasStarted(progress);
+  const cue = started && current ? colorGuide(progress.offset) : null;
+  const changingColor = cue?.fullStitches === 0 && cue.nextColor !== undefined;
+  const guidance = byId('current-run');
+  let instruction = '';
+  if (changingColor) {
+    const nextColor = pattern.palette[cue.nextColor]?.name ?? 'Unassigned';
+    instruction = 'Change color to ' + nextColor + ' when closing this stitch.';
+  } else if (cue) {
+    const count = format(cue.fullStitches);
+    const stitches = cue.fullStitches === 1 ? 'stitch' : 'stitches';
+    instruction = cue.nextColor === undefined ? `${count} ${stitches} remaining in this color.` :
+      `${count} full ${stitches} before the color change.`;
+  }
+  guidance.textContent = instruction;
+  guidance.hidden = !cue;
+  guidance.classList.toggle('is-color-change', changingColor);
+  cursorText.classList.toggle('is-color-change', changingColor);
   setText('percent', percent.format(Math.floor(progress.offset * 100 / total) / 100));
   setText('done-count', format(progress.offset) + ' of ' + format(total) + (total === 1 ? ' stitch' : ' stitches'));
   byId('progress-bar', 'progress').value = ratio * 100;
@@ -319,7 +344,6 @@ function renderProgress() {
   setText('current-row', current?.row ?? '—');
   setText('current-point', current?.point ?? '—');
   setText('current-color', current ? entry?.name ?? 'Unassigned' : 'All stitches complete');
-  setText('current-run', current && run ? run + (run === 1 ? ' stitch in this color' : ' stitches in this color') : '');
   setText('current-direction', current ? current.leftToRight ? 'Left to right' : 'Right to left' : '');
   const operation = byId('current-operation');
   operation.hidden = !sphere || !current;
@@ -331,11 +355,13 @@ function renderProgress() {
   const swatch = byId('current-swatch');
   swatch.hidden = !current;
   swatch.style.backgroundColor = entry?.hex ?? '#fbf8ef';
-  byId('next-stitch', 'button').disabled = !current;
+  nextStitch.textContent = started ? 'Next stitch' : 'Start';
+  nextStitch.disabled = !current;
   byId('previous-stitch', 'button').disabled = progress.offset === 0;
   cursorText.textContent = current ?
     (sphere ? 'Round ' : 'Row ') + current.row + ' · Stitch ' + current.point + ' · ' +
-      (entry?.name ?? 'Unassigned') + ' · ' + run + ' in a row' + (operation.hidden ? '' : ' · ' + operation.textContent) :
+      (entry?.name ?? 'Unassigned') + (instruction ? ' · ' + instruction : '') +
+      (operation.hidden ? '' : ' · ' + operation.textContent) :
     'Pattern complete';
   grid.mark(current, true);
   grid.reveal();
@@ -347,12 +373,34 @@ function saveProgress() {
 
 function move(amount: -1 | 1) {
   if (mode !== 'work') return;
+  if (amount === 1 && !hasStarted(progress)) {
+    progress.started = true;
+    saveProgress();
+    renderProgress();
+    return;
+  }
   const next = progress.offset + amount;
   if (next < 0 || next > totalSteps(pattern, progress)) return;
   grid.updateStep(progress, Math.min(next, progress.offset), amount > 0);
   progress.offset = next;
+  progress.started = true;
   saveProgress();
   renderProgress();
+}
+
+function jumpTo(tile: GridPosition) {
+  const previous = progress;
+  const next = jumpToStitch(pattern, previous, tile);
+  if (next === previous) return;
+  progress = next;
+  sessions.set(pattern.id, next);
+  saveProgress();
+  if (next.row !== previous.row || next.col !== previous.col) {
+    refreshTracking();
+  } else {
+    grid.setupProgress(progress);
+    renderProgress();
+  }
 }
 
 function paintAt(x: number, y: number, action: PaintAction) {
@@ -435,7 +483,12 @@ viewport.addEventListener('click', event => {
   const origin = clickOrigin;
   clickOrigin = null;
   if (origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 8) return;
-  move(1);
+  if (event.target instanceof Node && surface.contains(event.target)) {
+    const tile = grid.positionAt(event);
+    if (tile) jumpTo(tile);
+  } else {
+    move(1);
+  }
 });
 
 window.addEventListener('pagehide', finishGesture);
@@ -702,7 +755,7 @@ byId('progress-settings').addEventListener('click', () => {
   updateStartLimit();
   byId('start-direction', 'select').value = progress.direction;
   byId('start-alternate', 'input').checked = progress.alternate;
-  byId('progress-reset-note').hidden = !progress.offset;
+  byId('progress-reset-note').hidden = !hasStarted(progress);
   byId('progress-dialog', 'dialog').showModal();
 });
 
@@ -718,8 +771,7 @@ byId('progress-form').addEventListener('submit', event => {
   saveProgress();
   byId('progress-dialog', 'dialog').close();
   grid.drawPattern(pattern, progress.direction);
-  grid.setupProgress(progress);
-  renderProgress();
+  refreshTracking();
 });
 
 byId('new-pattern').addEventListener('click', () => {
@@ -736,7 +788,7 @@ byId('work-mode').addEventListener('click', () => {
   setMode('work');
   surface.focus({ preventScroll: true });
 });
-byId('next-stitch', 'button').addEventListener('click', () => move(1));
+nextStitch.addEventListener('click', () => move(1));
 byId('previous-stitch', 'button').addEventListener('click', () => move(-1));
 byId('undo-action', 'button').addEventListener('click', () => stepHistory(undo, redo));
 byId('redo-action', 'button').addEventListener('click', () => stepHistory(redo, undo));

@@ -39,11 +39,14 @@ export function makeGlobe(canvas: HTMLCanvasElement) {
     const cosYaw = Math.cos(yaw);
     const sinYaw = Math.sin(yaw);
     for (const { index, x, y, z, light } of pixels) {
-      const rotatedY = Math.min(1, Math.max(-1, y * cosPitch + z * sinPitch));
-      const rotatedZ = z * cosPitch - y * sinPitch;
+      // Roll the chart texture by half a turn so the first round is at the top of the finished sphere.
+      const chartX = -x;
+      const chartY = -y;
+      const rotatedY = Math.min(1, Math.max(-1, chartY * cosPitch + z * sinPitch));
+      const rotatedZ = z * cosPitch - chartY * sinPitch;
       const latitude = Math.min(pattern.rows - 0.0001, Math.acos(rotatedY) * pattern.rows / Math.PI);
       const row = rows[Math.floor(latitude)];
-      const longitude = 0.5 + Math.atan2(x * cosYaw + rotatedZ * sinYaw, rotatedZ * cosYaw - x * sinYaw) / turn;
+      const longitude = 0.5 + Math.atan2(chartX * cosYaw + rotatedZ * sinYaw, rotatedZ * cosYaw - chartX * sinYaw) / turn;
       const column = Math.min(row.stitches - 0.0001, longitude * row.stitches);
       const color = palette[pattern.cells[row.start + Math.floor(column)]] ?? neutral;
       const horizontalEdge = latitude % 1;
@@ -66,8 +69,8 @@ export function makeGlobe(canvas: HTMLCanvasElement) {
   }
 
   function rotate(x: number, y: number) {
-    yaw = (yaw + x) % turn;
-    pitch = Math.min(Math.PI / 2, Math.max(-Math.PI / 2, pitch + y));
+    yaw = (yaw - x) % turn;
+    pitch = Math.min(Math.PI / 2, Math.max(-Math.PI / 2, pitch - y));
     schedule();
   }
 

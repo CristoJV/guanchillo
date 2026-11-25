@@ -94,26 +94,35 @@ export function makeGrid(elements: GridElements) {
 
   function drawSphereLines() {
     const fragment = document.createDocumentFragment();
+    function addSpan(className: string, x: number, y: number, length: number, symbol?: string) {
+      if (length <= 0) return;
+      const span = document.createElement('span');
+      span.className = className;
+      span.style.setProperty('--x', String(x));
+      span.style.setProperty('--y', String(y));
+      span.style.setProperty('--length', String(length));
+      if (symbol) span.textContent = symbol;
+      fragment.append(span);
+    }
+
     if (pattern.shape === 'sphere') {
       const { rounds, goreWidth } = sphereLayout(pattern.rows);
       for (const round of rounds) {
         const y = pattern.rows - round.number;
+        const specials = specialStitches(round, direction === 'ltr');
+        const width = round.kind === 'increase' ? 2 : 1;
         for (let gore = 0; gore < gores; gore++) {
-          const strip = document.createElement('span');
-          strip.className = 'chart-strip';
-          strip.style.setProperty('--x', String(projectedX(goreWidth, round, gore * round.perGore)));
-          strip.style.setProperty('--y', String(y));
-          strip.style.setProperty('--length', String(round.perGore));
-          fragment.append(strip);
-        }
-        for (const stitch of specialStitches(round, direction === 'ltr')) {
-          const symbol = document.createElement('span');
-          symbol.className = 'chart-operation';
-          symbol.textContent = round.kind === 'increase' ? '+' : '−';
-          symbol.style.setProperty('--x', String(projectedX(goreWidth, round, stitch)));
-          symbol.style.setProperty('--y', String(y));
-          symbol.style.setProperty('--length', round.kind === 'increase' ? '2' : '1');
-          fragment.append(symbol);
+          const x = projectedX(goreWidth, round, gore * round.perGore);
+          addSpan('chart-strip', x, y, round.perGore);
+          const stitch = specials[gore];
+          if (stitch === undefined) {
+            addSpan('chart-singles', x, y, round.perGore);
+          } else {
+            const before = stitch - gore * round.perGore;
+            addSpan('chart-singles', x, y, before);
+            addSpan('chart-operation', x + before, y, width, round.kind === 'increase' ? 'V' : 'Λ');
+            addSpan('chart-singles', x + before + width, y, round.perGore - before - width);
+          }
         }
       }
     }
@@ -147,7 +156,7 @@ export function makeGrid(elements: GridElements) {
     }
   }
 
-  function positionAt(event: PointerEvent): GridPosition | null {
+  function positionAt(event: MouseEvent): GridPosition | null {
     const rect = surface.getBoundingClientRect();
     const x = (event.clientX - rect.left) * pattern.cols / rect.width;
     const y = Math.floor((event.clientY - rect.top) * pattern.rows / rect.height);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { earthPattern } from '../dist/earth.js';
 import {
-  chartRow, deserializePattern, newPattern, newProgress, newSphere,
+  chartRow, deserializePattern, hasStarted, jumpToStitch, makeColorGuide, newPattern, newProgress, newSphere,
   resizePattern, serializePattern, tileAt, totalSteps,
 } from '../dist/model.js';
 import { projectedStitch, projectedX, specialStitches, sphereLayout, stitchOperation } from '../dist/sphere.js';
@@ -77,4 +77,53 @@ test('JSON preserves sphere colors and progress and still accepts a flat version
   assert.equal(previousFile.pattern.shape, undefined);
   assert.equal(previousFile.progress.alternate, true);
   assert.deepEqual([0, 1, 2, 3, 4, 5].map(offset => tileAt(flat, previousFile.progress, offset).index), [5, 4, 3, 0, 1, 2]);
+});
+
+test('the yarn countdown excludes the color-change stitch and continues across rows', () => {
+  const pattern = newPattern(2, 4);
+  pattern.cells = [1, 2, 3, 3, 1, 0, 0, 0];
+  const progress = newProgress(pattern);
+  const guide = makeColorGuide(pattern, progress);
+  assert.deepEqual(Array.from({ length: 8 }, (_, offset) => guide(offset)), [
+    { fullStitches: 2, nextColor: 1 },
+    { fullStitches: 1, nextColor: 1 },
+    { fullStitches: 0, nextColor: 1 },
+    { fullStitches: 1, nextColor: 2 },
+    { fullStitches: 0, nextColor: 2 },
+    { fullStitches: 0, nextColor: 3 },
+    { fullStitches: 2, nextColor: undefined },
+    { fullStitches: 1, nextColor: undefined },
+  ]);
+  assert.equal(guide(8), null);
+});
+
+test('jumping to a stitch follows the current path and can move the start earlier', () => {
+  const flat = newPattern(3, 3);
+  const ready = newProgress(flat);
+  assert.equal(jumpToStitch(flat, ready, { x: 2, y: 2 }), ready);
+
+  const progress = newProgress(flat, { row: 3, col: 2 });
+  const earlier = jumpToStitch(flat, progress, { x: 1, y: 1 });
+  assert.equal(earlier.offset, 0);
+  assert.equal(earlier.direction, 'ltr');
+  assert.equal(earlier.started, true);
+  assert.equal(tileAt(flat, earlier, 0).index, 4);
+  assert.equal(tileAt(flat, earlier, 2).index, 2);
+
+  const sphere = newSphere(21);
+  const selected = jumpToStitch(sphere, newProgress(sphere), { x: 9, y: 19 });
+  assert.equal(selected.offset, 8);
+  const tile = tileAt(sphere, selected, selected.offset);
+  assert.deepEqual([tile.row, tile.point, tile.x], [2, 3, 9]);
+});
+
+test('saved progress distinguishes Start from zero completed stitches and reads legacy records', () => {
+  const pattern = newPattern(1, 3);
+  const ready = newProgress(pattern);
+  const active = { ...ready, started: true };
+  assert.equal(hasStarted(ready), false);
+  assert.deepEqual(deserializePattern(serializePattern(pattern, active)).progress, active);
+  assert.equal(hasStarted(active), true);
+  assert.equal(hasStarted({ ...ready, offset: 1 }), true);
+  assert.throws(() => deserializePattern(serializePattern(pattern, { ...ready, started: 'yes' })), /saved progress/);
 });

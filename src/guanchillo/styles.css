@@ -126,7 +126,6 @@ progress { display: block; width: 100%; height: 0.65rem; margin-top: 0.7rem; acc
 .coordinates dt, .direction { color: var(--muted); font-size: 0.875rem; }
 .coordinates dd { margin: 0.05rem 0 0; font: bold 1.9rem var(--serif); color: var(--dark-green); font-variant-numeric: tabular-nums; }
 .current-color { display: flex; align-items: center; gap: 0.65rem; min-height: 2.65rem; overflow-wrap: anywhere; }
-.current-color p { color: var(--muted); font-size: 0.875rem; }
 .current-color .swatch { width: 2.15rem; height: 2.15rem; flex: none; }
 .direction { margin-top: 0.75rem; }
 .follow-actions { display: grid; gap: 0.54rem; }
@@ -197,7 +196,7 @@ dialog p { color: var(--muted); font-size: 0.9rem; }
 .sphere .grid-surface { grid-area: 2 / 1; background: transparent; outline: none; }
 .sphere .grid-surface:focus-visible { outline: 3px solid #9b511d; outline-offset: 3px; }
 .sphere .grid-lines { background: none; }
-.chart-strip, .chart-operation {
+.chart-strip, .chart-singles, .chart-operation {
   position: absolute;
   top: calc(var(--y) * var(--pitch));
   left: calc(var(--x) * var(--pitch));
@@ -208,6 +207,12 @@ dialog p { color: var(--muted); font-size: 0.9rem; }
   background: repeating-linear-gradient(to right, #292b2050 0 1px, transparent 1px var(--pitch));
   box-shadow: inset -1px 0 #292b2038, inset 0 -1px #292b2048, inset 0 1px #292b202e;
 }
+.chart-singles, .grid-shell:not(.sphere) .grid-lines::after {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m5.5 5 5 6m0-6-5 6' fill='none' stroke='%231d2924' stroke-opacity='.58' stroke-width='2.8' stroke-linecap='round'/%3E%3Cpath d='m5.5 5 5 6m0-6-5 6' fill='none' stroke='%23fffdf4' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-size: var(--pitch) var(--pitch);
+}
+.grid-shell:not(.sphere) .grid-lines::after { content: ''; position: absolute; inset: 0; }
+.grid-surface #grid-done { z-index: 1; }
 .chart-operation {
   display: grid;
   place-content: center;
@@ -217,9 +222,14 @@ dialog p { color: var(--muted); font-size: 0.9rem; }
   line-height: 1;
   text-shadow: 0 0 2px #1d2924, 0 0 2px #1d2924, 0 1px 2px #1d2924;
 }
-.hide-operations .chart-operation { display: none; }
-.sphere-legend { display: flex; flex-basis: 100%; flex-wrap: wrap; gap: 0.3rem 0.8rem; }
-.sphere-legend b { display: inline-grid; place-items: center; width: 1.05rem; background: var(--soft-green); color: var(--dark-green); border-radius: 0.24rem; }
+.hide-operations :is(.chart-singles, .chart-operation),
+.grid-shell.hide-operations:not(.sphere) .grid-lines::after { display: none; }
+.stitch-legend, #sphere-legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; }
+.stitch-legend { flex-basis: 100%; }
+.stitch-legend b { display: inline-grid; place-items: center; width: 1.05rem; background: var(--soft-green); color: var(--dark-green); border-radius: 0.24rem; }
+.stitch-guidance { margin-top: 0.6rem; color: var(--muted); font-size: 0.875rem; }
+.stitch-guidance.is-color-change { padding: 0.5rem 0.6rem; background: #f6e9dd; color: #743a21; border: 1px solid #e7c5ad; border-radius: 0.4rem; font-weight: 650; }
+.grid-cursor.is-color-change { color: #743a21; font-weight: 750; }
 .stitch-operation { margin-top: 0.62rem; padding: 0.4rem 0.55rem; border-radius: 0.4rem; background: var(--soft-green); color: var(--dark-green); font-size: 0.86rem; font-weight: 650; }
 .form-note, .globe-help { color: var(--muted); font-size: 0.82rem; }
 #resize-form:has(#size-cols[hidden]) .field-grid { grid-template-columns: minmax(0, 1fr); }

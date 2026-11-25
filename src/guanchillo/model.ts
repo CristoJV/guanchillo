@@ -34,6 +34,7 @@ interface Start {
 export interface Progress extends Dimensions, Start {
   version: 1;
   offset: number;
+  started?: boolean;
 }
 
 export interface PatternFile extends PatternData {
@@ -212,6 +213,11 @@ export function totalSteps(pattern: Pattern, progress: Progress): number {
   return pattern.cells.length - pathStart(pattern, progress);
 }
 
+function rowMovesLeftToRight(progress: Progress, row: number): boolean {
+  const reverse = progress.alternate && (row - progress.row) % 2 !== 0;
+  return (progress.direction === 'ltr') !== reverse;
+}
+
 export function tileAt(pattern: Pattern, progress: Progress, offset: number): Tile | null {
   const position = pathStart(pattern, progress) + offset;
   if (offset < 0 || position >= pattern.cells.length) return null;
@@ -234,24 +240,40 @@ export function tileAt(pattern: Pattern, progress: Progress, offset: number): Ti
   }
   const y = progress.rows - row;
   const { stitches, start } = chartRow(pattern, y);
-  const reverse = progress.alternate && (row - progress.row) % 2 === 1;
-  const leftToRight = (progress.direction === 'ltr') !== reverse;
+  const leftToRight = rowMovesLeftToRight(progress, row);
   const col = leftToRight ? point : stitches - point + 1;
   return { row, point, col, x: col - 1, y, index: start + col - 1, leftToRight };
+}
+
+export function hasStarted(progress: Progress): boolean {
+  return progress.started === true || progress.offset > 0;
+}
+
+export function jumpToStitch(pattern: Pattern, progress: Progress, tile: GridPosition): Progress {
+  const row = pattern.rows - tile.y;
+  const { stitches, start } = chartRow(pattern, tile.y);
+  const leftToRight = rowMovesLeftToRight(progress, row);
+  const point = leftToRight ? tile.x : stitches - tile.x - 1;
+  const offset = pattern.cells.length - start - stitches + point - pathStart(pattern, progress);
+  if (offset === progress.offset) return progress;
+  if (offset >= 0) return { ...progress, offset, started: true };
+  const direction = leftToRight ? 'ltr' : 'rtl';
+  return { ...newProgress(pattern, { row, col: tile.x + 1, direction, alternate: progress.alternate }), started: true };
 }
 
 export function parseProgress(pattern: Pattern, value: unknown): Progress | null {
   if (!isRecord(value) || value.version !== 1 || value.rows !== pattern.rows || value.cols !== pattern.cols) {
     return null;
   }
-  const { row, col, direction, alternate, offset } = value;
+  const { row, col, direction, alternate, offset, started } = value;
   if (!isIntegerInRange(row, 1, pattern.rows) ||
     !isIntegerInRange(col, 1, chartRow(pattern, pattern.rows - row).stitches) ||
     (direction !== 'ltr' && direction !== 'rtl') || typeof alternate !== 'boolean' ||
+    (started !== undefined && typeof started !== 'boolean') ||
     (pattern.shape === 'sphere' && alternate)) return null;
   const start = newProgress(pattern, { row, col, direction, alternate });
   if (!isIntegerInRange(offset, 0, totalSteps(pattern, start))) return null;
-  return { ...start, offset };
+  return { ...start, offset, ...(started === undefined ? {} : { started }) };
 }
 
 export function serializePattern(pattern: Pattern, progress?: Progress): string {
@@ -275,16 +297,28 @@ export function deserializePattern(json: string): { pattern: Pattern; progress: 
   return { pattern, progress: newProgress(pattern) };
 }
 
-export function colorRun(pattern: Pattern, progress: Progress): number {
-  const current = tileAt(pattern, progress, progress.offset);
-  if (!current) return 0;
-  const color = pattern.cells[current.index];
-  let count = 1;
-  const { stitches } = chartRow(pattern, current.y);
-  for (let point = current.point + 1; point <= stitches; point++) {
-    const index = current.index + (current.leftToRight ? count : -count);
-    if (pattern.cells[index] !== color) break;
-    count++;
+export function makeColorGuide(pattern: Pattern, progress: Progress) {
+  const runs: { color: number; end: number }[] = [];
+  const total = totalSteps(pattern, progress);
+  for (let offset = 0; offset < total; offset++) {
+    const tile = tileAt(pattern, progress, offset);
+    if (!tile) break;
+    const color = pattern.cells[tile.index];
+    const run = runs.at(-1);
+    if (run?.color === color) run.end = offset + 1;
+    else runs.push({ color, end: offset + 1 });
   }
-  return count;
+
+  return (offset: number) => {
+    if (offset < 0 || offset >= total) return null;
+    let first = 0;
+    let last = runs.length - 1;
+    while (first < last) {
+      const middle = Math.floor((first + last) / 2);
+      if (offset < runs[middle].end) last = middle;
+      else first = middle + 1;
+    }
+    const nextColor = runs[first + 1]?.color;
+    return { fullStitches: runs[first].end - offset - (nextColor === undefined ? 0 : 1), nextColor };
+  };
 }

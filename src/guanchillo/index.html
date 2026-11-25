@@ -117,7 +117,7 @@
           </div>
         </div>
         <footer class="board-footer">
-          <span id="sphere-legend" class="sphere-legend" hidden><span><b>+</b> Increase over two stitches</span><span><b>−</b> Decrease</span><span>Round · stitch count</span></span>
+          <div class="stitch-legend"><span><b>X</b> Single crochet</span><span id="sphere-legend" hidden><span><b>V</b> Increase</span><span><b>Λ</b> Decrease</span><span>Round · stitch count</span></span></div>
           <span id="grid-shortcuts" class="grid-shortcuts">Arrow keys to move · Space to paint</span>
           <span id="grid-cursor" class="grid-cursor" aria-live="polite"></span>
         </footer>
@@ -161,13 +161,14 @@
             <div><dt id="current-row-name">Row</dt><dd id="current-row">—</dd></div>
             <div><dt>Stitch</dt><dd id="current-point">—</dd></div>
           </dl>
-          <div class="current-color"><span class="swatch" id="current-swatch"></span><div><strong id="current-color">—</strong><p id="current-run"></p></div></div>
+          <div class="current-color"><span class="swatch" id="current-swatch"></span><strong id="current-color">—</strong></div>
+          <p class="stitch-guidance" id="current-run" hidden></p>
           <p class="stitch-operation" id="current-operation" hidden></p>
           <p class="direction" id="current-direction"></p>
           <p class="direction" id="round-note" hidden></p>
         </section>
         <section class="follow-actions">
-          <button class="button primary full" id="next-stitch" type="button">Next stitch</button>
+          <button class="button primary full" id="next-stitch" type="button">Start</button>
           <button class="button outline full" id="previous-stitch" type="button">Previous stitch</button>
           <button class="button subtle full" id="progress-settings" type="button"><svg class="icon"><use href="#settings"></use></svg> Set starting point</button>
         </section>

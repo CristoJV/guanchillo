@@ -12,9 +12,9 @@ Zoom in to work on details. Select **Pan** and drag to move around. **Fit to vie
 
 ## Design a sphere
 
-Choose **Sphere** under **New pattern**, then enter a multiple of three from 6 to 126 rounds. Choose **Earth** to start with the supplied globe chart by @druidanu adapted to the rounded spiral. Drag the 3D preview or focus it and use the arrow keys to rotate.
+Choose **Sphere** under **New pattern**, then enter a multiple of three from 6 to 126 rounds. Choose **Earth** to start with the supplied globe chart by @druidanu adapted to the rounded spiral. The 3D preview starts with the first round at the top of the finished sphere. Drag it or focus it and use the arrow keys to rotate.
 
-Paint the stitches in the six chart sections to update the globe. The spaces between the sections are gaps in the projection. The labels at the right show each round and its stitch count. A **+** spans the two stitches of an increase. A **−** marks a decrease. Zoom in to see these marks on larger charts.
+Paint the stitches in the six chart sections to update the globe. The spaces between the sections are gaps in the projection. The labels at the right show each round and its stitch count. **X** is a single crochet, **V** spans the two stitches of an increase, and **Λ** marks a decrease. Zoom in to see these marks on larger charts.
 
 When following a sphere, crochet in a continuous spiral. The current stitch display tells you when to increase, decrease or work into the magic ring. Changing the number of rounds resamples your colors to fit the new chart. [Supergurumi's rounded sphere guide](https://www.supergurumi.com/es/tejer-esferas-y-bolas-de-cualquier-tamano)
 
@@ -25,9 +25,10 @@ Changes save in this browser as you work. **Save** confirms the current copy, an
 ## Crochet
 
 1. Open a pattern and select **Crochet**. Use **Set starting point** to change where you begin. Row 1 is at the bottom and column 1 is on the left. Applying a new start resets your stitch count.
-2. The outline and row guide show your current stitch. Finished stitches have a center mark. Stitches before your chosen starting point are faded.
-3. Click anywhere in the grid area for each stitch you finish. Use **Previous stitch** to go back. The color count includes your current stitch and ends at the next color change or row break.
-4. To resume, reopen the same pattern in the same browser and go to **Crochet**.
+2. Select **Start** to see the number of full stitches you can work in the current color. The stitch to close in the next color has its own **Change color** cue. Same-color counts continue across row or round boundaries when the yarn stays the same.
+3. After each stitch, use **Next stitch**, press **Space**, or click beside the chart. Use **Previous stitch** to go back. The outline shows the current stitch and completed stitches have a center mark.
+4. Click a stitch in the chart to jump directly to it. The stitches before it along your path are marked complete. If you click before the configured starting point, the selected stitch becomes the new start. The projection gaps between stitches have no click action.
+5. To resume, reopen the same pattern in the same browser and go to **Crochet**.
 
 ## Keyboard shortcuts
 
@@ -36,4 +37,4 @@ Changes save in this browser as you work. **Save** confirms the current copy, an
 | Pattern grid in Design | Arrow keys to move, Space or Enter to apply the active tool |
 | Grid or tool panel in Design | P for Pencil, E for Eraser, H for Pan |
 | Undo or redo | Ctrl or Cmd + Z to undo, Ctrl or Cmd + Shift + Z to redo. Ctrl or Cmd + Y also redoes |
-| Crochet mode | Space, Enter or Right arrow to advance, Left arrow to go back. Space and Enter activate the focused button if there is one |
+| Crochet mode | Space, Enter or Right arrow to start or advance, Left arrow to go back. Space and Enter activate the focused button if there is one |
