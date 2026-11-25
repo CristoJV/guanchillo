@@ -890,7 +890,13 @@ byId('color-add', 'button').addEventListener('click', () => openColor());
 byId('save-pattern').addEventListener('click', () => {
   if (savePattern()) status('Saved “' + pattern.name + '” in this browser.');
 });
-byId('export-pattern').addEventListener('click', exportPattern);
+byId('export-pattern').addEventListener('click', () => {
+  try {
+    exportPattern();
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : 'Could not export the pattern.');
+  }
+});
 
 for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-close]')) {
   const id = button.dataset.close;

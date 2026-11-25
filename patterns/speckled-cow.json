@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "id": "guanchillo-template-speckled-cow",
+  "name": "Vaca moteada",
+  "rows": 8,
+  "cols": 8,
+  "shape": "flat",
+  "recommended": { "rows": 8, "cols": 8 },
+  "tags": ["caras-pixeladas", "miniaturas"],
+  "palette": [
+    { "name": "Verde agua", "hex": "#9dcece" },
+    { "name": "Marfil de los cuernos", "hex": "#f8d795" },
+    { "name": "Marrón nogal", "hex": "#674437" },
+    { "name": "Crema", "hex": "#fff1d6" },
+    { "name": "Sombra topo", "hex": "#caaaa1" },
+    { "name": "Tinta", "hex": "#241d2b" },
+    { "name": "Rosa del hocico", "hex": "#e9949e" },
+    { "name": "Malva oscuro", "hex": "#9d4f64" }
+  ],
+  "cells": [
+    0, 1, 0, 0, 0, 0, 1, 0,
+    2, 1, 1, 3, 3, 1, 1, 2,
+    0, 2, 2, 3, 3, 3, 4, 0,
+    0, 2, 5, 3, 3, 5, 4, 0,
+    0, 2, 3, 3, 3, 4, 4, 0,
+    0, 0, 7, 6, 6, 7, 0, 0,
+    0, 0, 6, 6, 6, 6, 0, 0,
+    0, 0, 0, 4, 4, 0, 0, 0
+  ]
+}

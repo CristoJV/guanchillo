@@ -20,15 +20,8 @@ export function parseTemplate(key: string, file: unknown): Pick<PatternTemplate,
   if (id !== 'guanchillo-template-' + key || master.palette.length > limits.colors) {
     throw new Error('Invalid template identity or palette.');
   }
-  const size = typeof file === 'object' && file && 'recommended' in file ? file.recommended : null;
-  if (typeof size !== 'object' || !size || !('rows' in size) || !('cols' in size) ||
-    typeof size.rows !== 'number' || typeof size.cols !== 'number' ||
-    !Number.isInteger(size.rows) || !Number.isInteger(size.cols) ||
-    size.rows < 1 || size.rows > master.rows || size.cols < 1 || size.cols > master.cols ||
-    (master.shape === 'sphere' && (!isSphereSize(size.rows) || size.cols !== size.rows * 2))) {
-    throw new Error('Invalid recommended template size.');
-  }
-  return { pattern: { ...master, id }, recommended: { rows: size.rows, cols: size.cols } };
+  if (!master.recommended) throw new Error('Missing recommended template size.');
+  return { pattern: { ...master, id }, recommended: master.recommended };
 }
 
 export function deriveTemplate(template: Pick<PatternTemplate, 'pattern'>, size: Dimensions, colors: number): Pattern {

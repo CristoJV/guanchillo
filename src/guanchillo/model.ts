@@ -24,6 +24,7 @@ interface PatternData extends Dimensions {
   shape: 'flat' | 'sphere';
   tags: string[];
   source?: PatternSource;
+  recommended?: Dimensions;
   name: string;
   palette: Color[];
   cells: number[];
@@ -95,7 +96,7 @@ export function newSphere(rows: number, name = 'Untitled sphere'): Pattern {
   };
 }
 
-export function chartRow(pattern: Pattern, y: number): { stitches: number; start: number } {
+export function chartRow(pattern: PatternData, y: number): { stitches: number; start: number } {
   if (pattern.shape !== 'sphere') return { stitches: pattern.cols, start: y * pattern.cols };
   const layout = sphereLayout(pattern.rows);
   const round = layout.rounds[pattern.rows - y - 1];
@@ -138,7 +139,7 @@ function isIntegerInRange(value: unknown, min: number, max: number): value is nu
 
 function parseTags(value: unknown): string[] {
   if (value === undefined) return [];
-  if (!Array.isArray(value) || !value.every((tag: unknown) => typeof tag === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(tag))) {
+  if (!Array.isArray(value) || ![...value].every((tag: unknown) => typeof tag === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(tag))) {
     throw new Error('Pattern tags must be a list of lowercase names separated by hyphens.');
   }
   return [...new Set<string>(value)];
@@ -162,11 +163,20 @@ function parseSource(value: unknown): PatternSource | undefined {
   return { title: value.title.trim(), url: url.href, ...(value.note ? { note: value.note } : {}) };
 }
 
+function parseRecommended(value: unknown, rows: number, cols: number, shape: PatternData['shape']): Dimensions | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || !isIntegerInRange(value.rows, 1, rows) || !isIntegerInRange(value.cols, 1, cols) ||
+    (shape === 'sphere' && (!isSphereSize(value.rows) || value.cols !== value.rows * 2))) {
+    throw new Error('Invalid recommended pattern size.');
+  }
+  return { rows: value.rows, cols: value.cols };
+}
+
 export function parsePattern(value: unknown): PatternData & { id: string | null } {
   if (!isRecord(value) || value.version !== 1) {
     throw new Error('Expected a version 1 Guanchillo pattern.');
   }
-  const { version, rows, cols, cells, palette } = value;
+  const { version, rows, cols, palette } = value;
   const shape = value.shape === undefined ? 'flat' : value.shape;
   const name = typeof value.name === 'string' ? value.name.trim() : '';
   if (!isIntegerInRange(rows, 1, limits.dimension) || !isIntegerInRange(cols, 1, limits.dimension)) {
@@ -179,7 +189,7 @@ export function parsePattern(value: unknown): PatternData & { id: string | null 
   if (!name || name.length > limits.name || !Array.isArray(palette) || !palette.length || palette.length > legacyColorLimit) {
     throw new Error('Check the pattern name and color palette.');
   }
-  const colors = palette.map((entry: unknown) => {
+  const colors = Array.from(palette, (entry: unknown) => {
     const colorName = isRecord(entry) && typeof entry.name === 'string' ? entry.name.trim() : '';
     if (!colorName || colorName.length > limits.name || !isRecord(entry) ||
       typeof entry.hex !== 'string' || !/^#[a-f\d]{6}$/i.test(entry.hex)) {
@@ -188,19 +198,29 @@ export function parsePattern(value: unknown): PatternData & { id: string | null 
     return { name: colorName, hex: entry.hex.toLowerCase() };
   });
   const stitchCount = shape === 'sphere' ? sphereLayout(rows).stitches : rows * cols;
-  if (!Array.isArray(cells) || cells.length !== stitchCount ||
-    !cells.every((index: unknown): index is number => isIntegerInRange(index, -1, colors.length - 1))) {
+  const cells: unknown[] = Array.isArray(value.cells) && value.cells.length === stitchCount ? [...value.cells] : [];
+  if (cells.length !== stitchCount || !cells.every(index => isIntegerInRange(index, -1, colors.length - 1))) {
     throw new Error('The cells do not match the dimensions or palette.');
   }
   const id = typeof value.id === 'string' && /^[a-z\d-]{16,64}$/i.test(value.id) ? value.id : null;
   const tags = parseTags(value.tags);
   const source = parseSource(value.source);
-  return { version, id, name, rows, cols, shape, tags, palette: colors, cells: [...cells], ...(source ? { source } : {}) };
+  const recommended = parseRecommended(value.recommended, rows, cols, shape);
+  return {
+    version, id, name, rows, cols, shape, tags, palette: colors, cells,
+    ...(source ? { source } : {}), ...(recommended ? { recommended } : {}),
+  };
+}
+
+function withChartSize(pattern: Pattern, rows: number, cols: number): Pattern {
+  const { recommended, ...data } = pattern;
+  const fits = recommended && recommended.rows <= rows && recommended.cols <= cols;
+  return { ...data, rows, cols, ...(fits ? { recommended } : {}) };
 }
 
 export function resamplePattern(pattern: Pattern, rows: number, cols: number): Pattern {
   const result: Pattern = {
-    ...pattern, rows, cols: pattern.shape === 'sphere' ? sphereLayout(rows).goreWidth * gores : cols,
+    ...withChartSize(pattern, rows, pattern.shape === 'sphere' ? sphereLayout(rows).goreWidth * gores : cols),
     cells: [],
   };
   for (let y = 0; y < rows; y++) {
@@ -226,7 +246,7 @@ export function resizePattern(pattern: Pattern, rows: number, cols: number): Pat
       cells[(rows - row) * cols + col] = pattern.cells[(pattern.rows - row) * pattern.cols + col];
     }
   }
-  return { ...pattern, rows, cols, cells };
+  return { ...withChartSize(pattern, rows, cols), cells };
 }
 
 export function counts(pattern: Pattern) {
@@ -239,7 +259,7 @@ export function counts(pattern: Pattern) {
   return { colors, empty };
 }
 
-export function newProgress(pattern: Pattern, start: Partial<Start> = {}): Progress {
+export function newProgress(pattern: PatternData, start: Partial<Start> = {}): Progress {
   const direction = start.direction === 'ltr' ? 'ltr' : 'rtl';
   const row = start.row ?? 1;
   return {
@@ -249,13 +269,13 @@ export function newProgress(pattern: Pattern, start: Partial<Start> = {}): Progr
   };
 }
 
-function pathStart(pattern: Pattern, progress: Progress): number {
+function pathStart(pattern: PatternData, progress: Progress): number {
   const { row, col, direction } = progress;
   const { stitches, start } = chartRow(pattern, pattern.rows - row);
   return pattern.cells.length - start - stitches + (direction === 'ltr' ? col - 1 : stitches - col);
 }
 
-export function totalSteps(pattern: Pattern, progress: Progress): number {
+export function totalSteps(pattern: PatternData, progress: Progress): number {
   return pattern.cells.length - pathStart(pattern, progress);
 }
 
@@ -307,7 +327,7 @@ export function jumpToStitch(pattern: Pattern, progress: Progress, tile: GridPos
   return { ...newProgress(pattern, { row, col: tile.x + 1, direction, alternate: progress.alternate }), started: true };
 }
 
-export function parseProgress(pattern: Pattern, value: unknown): Progress | null {
+export function parseProgress(pattern: PatternData, value: unknown): Progress | null {
   if (!isRecord(value) || value.version !== 1 || value.rows !== pattern.rows || value.cols !== pattern.cols) {
     return null;
   }
@@ -322,25 +342,41 @@ export function parseProgress(pattern: Pattern, value: unknown): Progress | null
   return { ...start, offset, ...(started === undefined ? {} : { started }) };
 }
 
+function parsePatternFile(value: unknown): PatternFile {
+  const { id, ...data } = parsePattern(value);
+  const file: PatternFile = { ...data, ...(id === null ? {} : { id }) };
+  if (isRecord(value) && value.progress !== undefined) {
+    const progress = parseProgress(data, value.progress);
+    if (!progress) throw new Error('The saved progress does not match the pattern or its stitch path.');
+    file.progress = progress;
+  }
+  return file;
+}
+
+function checkFileSize(json: string): void {
+  if (new TextEncoder().encode(json).length > limits.file) throw new Error('The file exceeds 1 MB.');
+}
+
 export function serializePattern(pattern: Pattern, progress?: Progress): string {
-  const file: PatternFile = { ...pattern, progress };
-  return JSON.stringify(file);
+  const file = parsePatternFile({ ...pattern, progress });
+  if (file.id === undefined) throw new Error('Invalid pattern ID.');
+  file.recommended ??= { rows: file.rows, cols: file.cols };
+  const json = JSON.stringify(file);
+  checkFileSize(json);
+  return json;
 }
 
 export function deserializePattern(json: string): { pattern: Pattern; progress: Progress } {
+  checkFileSize(json);
   let value: unknown;
   try {
     value = JSON.parse(json);
   } catch {
     throw new Error('The file does not contain valid JSON.');
   }
-  const pattern: Pattern = { ...parsePattern(value), id: newPatternId() };
-  if (isRecord(value) && 'progress' in value) {
-    const progress = parseProgress(pattern, value.progress);
-    if (!progress) throw new Error('The saved progress does not match the pattern or its stitch path.');
-    return { pattern, progress };
-  }
-  return { pattern, progress: newProgress(pattern) };
+  const { progress, ...data } = parsePatternFile(value);
+  const pattern: Pattern = { ...data, id: newPatternId() };
+  return { pattern, progress: progress ?? newProgress(pattern) };
 }
 
 export function makeColorGuide(pattern: Pattern, progress: Progress) {

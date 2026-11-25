@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "id": "guanchillo-template-pixel-pilot",
+  "name": "Aviadora pixelada",
+  "rows": 8,
+  "cols": 8,
+  "shape": "flat",
+  "recommended": { "rows": 8, "cols": 8 },
+  "tags": ["caras-pixeladas", "miniaturas"],
+  "palette": [
+    { "name": "Azul pizarra", "hex": "#354b61" },
+    { "name": "Cuero oscuro", "hex": "#472d35" },
+    { "name": "Cobre", "hex": "#aa5b3c" },
+    { "name": "Ámbar", "hex": "#ec9d39" },
+    { "name": "Reflejo de vainilla", "hex": "#fff0a5" },
+    { "name": "Piel tostada", "hex": "#d79d73" },
+    { "name": "Turquesa", "hex": "#44b5aa" },
+    { "name": "Cacao", "hex": "#7a443d" }
+  ],
+  "cells": [
+    0, 0, 1, 1, 1, 1, 0, 0,
+    0, 1, 2, 2, 2, 2, 1, 0,
+    1, 2, 1, 2, 2, 1, 2, 1,
+    1, 3, 4, 1, 1, 3, 4, 1,
+    1, 5, 5, 5, 5, 5, 5, 1,
+    0, 1, 5, 7, 7, 5, 1, 0,
+    0, 0, 6, 6, 6, 6, 0, 0,
+    0, 6, 6, 0, 6, 6, 6, 0
+  ]
+}

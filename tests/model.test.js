@@ -74,14 +74,19 @@ test('JSON preserves sphere colors and progress and still accepts a flat version
   assert.deepEqual(restored.pattern.cells, resized.cells);
   assert.deepEqual(restored.progress, progress);
   assert.notEqual(restored.pattern.id, resized.id);
-  assert.throws(() => deserializePattern(serializePattern({ ...earth, rows: 22 })), /sphere dimensions/);
-  assert.throws(() => deserializePattern(serializePattern(earth, { ...newProgress(earth), alternate: true })), /saved progress/);
+  const invalidSphere = { ...earth, rows: 22 };
+  const invalidProgress = { ...newProgress(earth), alternate: true };
+  assert.throws(() => serializePattern(invalidSphere), /sphere dimensions/);
+  assert.throws(() => deserializePattern(JSON.stringify(invalidSphere)), /sphere dimensions/);
+  assert.throws(() => serializePattern(earth, invalidProgress), /saved progress/);
+  assert.throws(() => deserializePattern(JSON.stringify({ ...earth, progress: invalidProgress })), /saved progress/);
 
   const flat = newPattern(2, 3);
   const { shape, tags, ...legacy } = flat;
   const previousFile = deserializePattern(JSON.stringify(legacy));
   assert.equal(previousFile.pattern.shape, 'flat');
   assert.deepEqual(previousFile.pattern.tags, []);
+  assert.deepEqual(JSON.parse(serializePattern(previousFile.pattern)).recommended, { rows: 2, cols: 3 });
   assert.equal(previousFile.progress.alternate, true);
   assert.deepEqual([0, 1, 2, 3, 4, 5].map(offset => tileAt(flat, previousFile.progress, offset).index), [5, 4, 3, 0, 1, 2]);
 });
@@ -132,7 +137,9 @@ test('saved progress distinguishes Start from zero completed stitches and reads 
   assert.deepEqual(deserializePattern(serializePattern(pattern, active)).progress, active);
   assert.equal(hasStarted(active), true);
   assert.equal(hasStarted({ ...ready, offset: 1 }), true);
-  assert.throws(() => deserializePattern(serializePattern(pattern, { ...ready, started: 'yes' })), /saved progress/);
+  const invalid = { ...ready, started: 'yes' };
+  assert.throws(() => serializePattern(pattern, invalid), /saved progress/);
+  assert.throws(() => deserializePattern(JSON.stringify({ ...pattern, progress: invalid })), /saved progress/);
 });
 
 test('image quantization respects the color budget and keeps transparent stitches unassigned', () => {
@@ -177,11 +184,14 @@ test('the public template index contains valid spherical and flat pattern files'
     assert.equal(reduced.rows, recommended.rows);
     assert.equal(reduced.cols, recommended.cols);
     assert(reduced.palette.length <= 4);
-    const restored = deserializePattern(serializePattern(reduced)).pattern;
+    const exported = serializePattern(reduced);
+    assert.deepEqual(JSON.parse(exported).recommended, recommended);
+    const restored = deserializePattern(exported).pattern;
     assert.deepEqual(restored.cells, reduced.cells);
     assert.equal(restored.shape, file.shape);
     assert.deepEqual(restored.tags, file.tags);
     assert.deepEqual(restored.source, file.source);
+    assert.deepEqual(restored.recommended, recommended);
     if (pattern.tags.includes('sistema-solar')) assert.equal(pattern.shape, 'sphere');
     if (pattern.tags.includes('caras-pixeladas')) assert.equal(pattern.shape, 'flat');
   }
@@ -210,12 +220,45 @@ test('each Canary Island and cultural motif has a distinct 32 by 32 flat master 
   }
 });
 
-test('invalid shape, tags and source links are rejected on import', () => {
+test('malformed chart data is rejected on import and export', () => {
   const pattern = newPattern(1, 1);
-  assert.throws(() => parsePattern({ ...pattern, shape: 'hexagon' }), /shape/);
-  assert.throws(() => parsePattern({ ...pattern, tags: 'canarias' }), /tags/);
-  assert.throws(() => parsePattern({ ...pattern, tags: ['Solar system'] }), /tags/);
-  assert.throws(() => parsePattern({ ...pattern, source: { title: 'Source', url: 'javascript:alert(1)' } }), /HTTPS/);
+  for (const [fields, message] of [
+    [{ shape: 'hexagon' }, /shape/],
+    [{ tags: 'canarias' }, /tags/],
+    [{ tags: ['Solar system'] }, /tags/],
+    [{ tags: Array(1) }, /tags/],
+    [{ source: { title: 'Source', url: 'javascript:alert(1)' } }, /HTTPS/],
+    [{ cells: [pattern.palette.length] }, /cells/],
+    [{ cells: Array(1) }, /cells/],
+    [{ palette: Array(1) }, /color/],
+    [{ recommended: { rows: 2, cols: 1 } }, /recommended pattern size/],
+  ]) {
+    const invalid = { ...pattern, ...fields };
+    assert.throws(() => serializePattern(invalid), message);
+    assert.throws(() => deserializePattern(JSON.stringify(invalid)), message);
+  }
+  const sphere = { ...newSphere(12), recommended: { rows: 6, cols: 18 } };
+  assert.throws(() => serializePattern(sphere), /recommended pattern size/);
+  assert.throws(() => deserializePattern(JSON.stringify(sphere)), /recommended pattern size/);
+});
+
+test('recommendations survive a round trip and fall back to chart size when they no longer fit', () => {
+  const master = readTemplate('earth');
+  const { pattern } = deserializePattern(JSON.stringify(master));
+  assert.deepEqual(JSON.parse(serializePattern(pattern)).recommended, master.recommended);
+  const smaller = resizePattern(pattern, 12, 24);
+  assert.deepEqual(JSON.parse(serializePattern(smaller)).recommended, { rows: 12, cols: 24 });
+
+  const flat = { ...newPattern(6, 5), recommended: { rows: 4, cols: 3 } };
+  assert.deepEqual(JSON.parse(serializePattern(resizePattern(flat, 6, 4))).recommended, flat.recommended);
+  assert.deepEqual(JSON.parse(serializePattern(resizePattern(flat, 4, 2))).recommended, { rows: 4, cols: 2 });
+});
+
+test('the import and export size limit counts UTF-8 bytes', () => {
+  const pattern = newPattern(1, 1);
+  pattern.source = { title: 'Source', url: 'https://example.com/', note: 'ñ'.repeat(500_000) };
+  assert.throws(() => serializePattern(pattern), /exceeds 1 MB/);
+  assert.throws(() => deserializePattern(JSON.stringify(pattern)), /exceeds 1 MB/);
 });
 
 test('Earth derives color and resolution combinations from one unchanged master', () => {
