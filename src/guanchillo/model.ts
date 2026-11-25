@@ -13,9 +13,17 @@ interface Color {
   hex: string;
 }
 
+interface PatternSource {
+  title: string;
+  url: string;
+  note?: string;
+}
+
 interface PatternData extends Dimensions {
   version: 1;
-  shape?: 'sphere';
+  shape: 'flat' | 'sphere';
+  tags: string[];
+  source?: PatternSource;
   name: string;
   palette: Color[];
   cells: number[];
@@ -71,7 +79,7 @@ function newPatternId(): string {
 
 export function newPattern(rows = 24, cols = 24, name = 'Untitled pattern'): Pattern {
   return {
-    version: 1,
+    version: 1, shape: 'flat', tags: [],
     id: newPatternId(),
     name, rows, cols, palette: structuredClone(samplePalette),
     cells: Array<number>(rows * cols).fill(-1),
@@ -81,7 +89,7 @@ export function newPattern(rows = 24, cols = 24, name = 'Untitled pattern'): Pat
 export function newSphere(rows: number, name = 'Untitled sphere'): Pattern {
   const layout = sphereLayout(rows);
   return {
-    version: 1, shape: 'sphere', id: newPatternId(),
+    version: 1, shape: 'sphere', tags: [], id: newPatternId(),
     name, rows, cols: layout.goreWidth * gores, palette: structuredClone(samplePalette),
     cells: Array<number>(layout.stitches).fill(-1),
   };
@@ -128,16 +136,43 @@ function isIntegerInRange(value: unknown, min: number, max: number): value is nu
   return typeof value === 'number' && Number.isInteger(value) && value >= min && value <= max;
 }
 
+function parseTags(value: unknown): string[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || !value.every((tag: unknown) => typeof tag === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(tag))) {
+    throw new Error('Pattern tags must be a list of lowercase names separated by hyphens.');
+  }
+  return [...new Set<string>(value)];
+}
+
+function parseSource(value: unknown): PatternSource | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || typeof value.title !== 'string' || !value.title.trim() ||
+    typeof value.url !== 'string' || (value.note !== undefined && typeof value.note !== 'string')) {
+    throw new Error('Invalid pattern source.');
+  }
+  let url: URL;
+  try {
+    url = new URL(value.url);
+  } catch {
+    throw new Error('Pattern sources must use a public HTTPS URL.');
+  }
+  if (url.protocol !== 'https:' || url.username || url.password) {
+    throw new Error('Pattern sources must use a public HTTPS URL.');
+  }
+  return { title: value.title.trim(), url: url.href, ...(value.note ? { note: value.note } : {}) };
+}
+
 export function parsePattern(value: unknown): PatternData & { id: string | null } {
   if (!isRecord(value) || value.version !== 1) {
     throw new Error('Expected a version 1 Guanchillo pattern.');
   }
-  const { version, rows, cols, cells, palette, shape } = value;
+  const { version, rows, cols, cells, palette } = value;
+  const shape = value.shape === undefined ? 'flat' : value.shape;
   const name = typeof value.name === 'string' ? value.name.trim() : '';
   if (!isIntegerInRange(rows, 1, limits.dimension) || !isIntegerInRange(cols, 1, limits.dimension)) {
     throw new Error('Rows and columns must be between 1 and 256.');
   }
-  if (shape !== undefined && shape !== 'sphere') throw new Error('Unknown pattern shape.');
+  if (shape !== 'flat' && shape !== 'sphere') throw new Error('Unknown pattern shape.');
   if (shape === 'sphere' && (!isSphereSize(rows) || cols !== sphereLayout(rows).goreWidth * gores)) {
     throw new Error('The sphere dimensions do not match its round count.');
   }
@@ -158,7 +193,9 @@ export function parsePattern(value: unknown): PatternData & { id: string | null 
     throw new Error('The cells do not match the dimensions or palette.');
   }
   const id = typeof value.id === 'string' && /^[a-z\d-]{16,64}$/i.test(value.id) ? value.id : null;
-  return { version, id, name, rows, cols, palette: colors, cells: [...cells], ...(shape ? { shape } : {}) };
+  const tags = parseTags(value.tags);
+  const source = parseSource(value.source);
+  return { version, id, name, rows, cols, shape, tags, palette: colors, cells: [...cells], ...(source ? { source } : {}) };
 }
 
 export function resamplePattern(pattern: Pattern, rows: number, cols: number): Pattern {

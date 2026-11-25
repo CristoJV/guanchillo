@@ -19,9 +19,11 @@ Zoom in to work on details. Select **Pan** and drag to move around. **Fit to vie
 
 ## Browse the pattern collection
 
-Open **Collection** to browse the Solar System, Christmas, Pixel Faces and Originals. Pick **Recommended** for the suggested size or **High** for the master size. Use **Colors** to choose how many yarns to use, up to the number available in the master. The preview updates before you choose **Edit** or **Crochet**. Returning with the same settings reopens the local copy, including its progress.
+Open **Collection** and use **Tag** and **Type** together to find charts. You can also select a tag on a card to apply it. Pick **Recommended** for the suggested size or **High** for the master size when both are available. Use **Colors** to choose how many yarns to use, up to the number available in the master. The preview updates before you choose **Edit** or **Crochet**. Returning with the same settings reopens the local copy, including its progress.
 
-For a custom size, choose a template in **New pattern**, then enter the stitch dimensions or number of rounds. Guanchillo derives the chart from the master. Spheres top out at 63 rounds, the closest usable size to 64 under the multiple-of-three spiral rule. Flat templates have 64 stitches along the longer side and changing their height adjusts the width proportionally.
+Choose **Islas** for the eight island outlines, or **Simbolos canarios** for the Ídolo de Tara, triangular pintadera, La Zarza spiral, dragon tree and timple. These charts are 32 × 32 stitches. Select **Source** on a card to see its reference.
+
+To derive a smaller chart, choose a template in **New pattern**, then enter the stitch dimensions or number of rounds. Spheres top out at 63 rounds, the closest usable size to 64 under the multiple-of-three spiral rule. Changing the height of a flat template adjusts the width proportionally.
 
 Use **Recommended** for the approximate Solar System scale when working with the same yarn and hook. The Moon uses 12 rounds, Earth uses 24, and Jupiter uses 42. [NASA's planetary fact sheet](https://nssdc.gsfc.nasa.gov/planetary/factsheet/)
 

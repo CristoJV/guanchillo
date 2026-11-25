@@ -78,8 +78,10 @@ test('JSON preserves sphere colors and progress and still accepts a flat version
   assert.throws(() => deserializePattern(serializePattern(earth, { ...newProgress(earth), alternate: true })), /saved progress/);
 
   const flat = newPattern(2, 3);
-  const previousFile = deserializePattern(JSON.stringify(flat));
-  assert.equal(previousFile.pattern.shape, undefined);
+  const { shape, tags, ...legacy } = flat;
+  const previousFile = deserializePattern(JSON.stringify(legacy));
+  assert.equal(previousFile.pattern.shape, 'flat');
+  assert.deepEqual(previousFile.pattern.tags, []);
   assert.equal(previousFile.progress.alternate, true);
   assert.deepEqual([0, 1, 2, 3, 4, 5].map(offset => tileAt(flat, previousFile.progress, offset).index), [5, 4, 3, 0, 1, 2]);
 });
@@ -157,28 +159,63 @@ test('a supplied color palette preserves its exact colors and order', () => {
 });
 
 test('the public template index contains valid spherical and flat pattern files', () => {
-  const groups = readTemplate('index');
-  assert.deepEqual(groups.space, ['earth', 'moon', 'mercury', 'venus', 'mars', 'jupiter', 'saturn', 'uranus', 'neptune']);
-  assert.equal(groups.holiday.length, 7);
-  assert.equal(groups.pixel.length, 16);
-  assert.equal(groups.originals.length, 6);
-  const keys = Object.values(groups).flat();
+  const { patterns: keys } = readTemplate('index');
+  assert.equal(new Set(keys).size, keys.length);
   assert.deepEqual(readdirSync(templates).sort(), [...keys, 'index'].map(key => key + '.json').sort());
   for (const key of keys) {
-    const template = parseTemplate(key, readTemplate(key));
+    const file = readTemplate(key);
+    const template = parseTemplate(key, file);
     const { pattern, recommended } = template;
     assert.equal(pattern.id, 'guanchillo-template-' + key);
+    assert(['flat', 'sphere'].includes(file.shape));
+    assert(file.tags.length > 0);
+    assert.deepEqual(pattern.tags, file.tags);
     assert(pattern.palette.length <= 8);
     if (pattern.shape === 'sphere') assert.deepEqual([pattern.rows, pattern.cols], [63, 126]);
-    else assert.equal(Math.max(pattern.rows, pattern.cols), 64);
+    else assert(Math.max(pattern.rows, pattern.cols) <= 64);
     const reduced = deriveTemplate(template, recommended, 4);
     assert.equal(reduced.rows, recommended.rows);
     assert.equal(reduced.cols, recommended.cols);
     assert(reduced.palette.length <= 4);
-    assert.deepEqual(deserializePattern(serializePattern(reduced)).pattern.cells, reduced.cells);
-    if (groups.space.includes(key)) assert.equal(pattern.shape, 'sphere');
-    if (groups.pixel.includes(key)) assert.equal(pattern.shape, undefined);
+    const restored = deserializePattern(serializePattern(reduced)).pattern;
+    assert.deepEqual(restored.cells, reduced.cells);
+    assert.equal(restored.shape, file.shape);
+    assert.deepEqual(restored.tags, file.tags);
+    assert.deepEqual(restored.source, file.source);
+    if (pattern.tags.includes('sistema-solar')) assert.equal(pattern.shape, 'sphere');
+    if (pattern.tags.includes('caras-pixeladas')) assert.equal(pattern.shape, 'flat');
   }
+});
+
+test('each Canary Island and cultural motif has a distinct 32 by 32 flat master with attribution', () => {
+  const { patterns: keys } = readTemplate('index');
+  const filesWithTag = tag => keys.map(readTemplate).filter(file => file.tags.includes(tag));
+  const islands = filesWithTag('islas');
+  const symbols = filesWithTag('simbolos-canarios');
+  assert.deepEqual(islands.map(({ name }) => name).sort(), [
+    'El Hierro', 'Fuerteventura', 'Gran Canaria', 'La Gomera', 'La Graciosa', 'La Palma', 'Lanzarote', 'Tenerife',
+  ]);
+  assert.deepEqual(symbols.map(({ name }) => name).sort(), [
+    'Drago canario', 'Espiral de La Zarza', 'Pintadera triangular', 'Timple canario', 'Ídolo de Tara',
+  ]);
+  const charts = [...islands, ...symbols];
+  assert.equal(new Set(charts.map(({ cells }) => JSON.stringify(cells))).size, charts.length);
+  for (const { shape, rows, cols, recommended, tags, palette, cells, source } of charts) {
+    assert.deepEqual({ shape, rows, cols }, { shape: 'flat', rows: 32, cols: 32 });
+    assert.deepEqual(recommended, { rows, cols });
+    assert(tags.includes('canarias'));
+    assert(palette.length >= 2 && palette.length <= 4);
+    assert.equal(new Set(cells).size, palette.length);
+    assert(source.title && source.note);
+  }
+});
+
+test('invalid shape, tags and source links are rejected on import', () => {
+  const pattern = newPattern(1, 1);
+  assert.throws(() => parsePattern({ ...pattern, shape: 'hexagon' }), /shape/);
+  assert.throws(() => parsePattern({ ...pattern, tags: 'canarias' }), /tags/);
+  assert.throws(() => parsePattern({ ...pattern, tags: ['Solar system'] }), /tags/);
+  assert.throws(() => parsePattern({ ...pattern, source: { title: 'Source', url: 'javascript:alert(1)' } }), /HTTPS/);
 });
 
 test('Earth derives color and resolution combinations from one unchanged master', () => {

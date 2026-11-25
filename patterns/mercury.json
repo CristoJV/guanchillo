@@ -39,6 +39,10 @@
       "hex": "#e4ceba"
     }
   ],
+  "tags": [
+    "sistema-solar",
+    "planetas"
+  ],
   "cells": [
     0, 5, 2, 3, 2, 5,
     2, 2, 5, 2, 2, 2, 5, 2, 2, 2, 5, 2,

@@ -181,12 +181,15 @@
     </div>
     <section id="collection-view" aria-label="Pattern collection" hidden>
       <div class="collection-toolbar">
-        <div class="collection-filters" role="group" aria-label="Filter by category">
-          <button class="button outline" type="button" data-category="all" aria-pressed="true">All</button>
-          <button class="button outline" type="button" data-category="space" aria-pressed="false">Solar system</button>
-          <button class="button outline" type="button" data-category="holiday" aria-pressed="false">Christmas</button>
-          <button class="button outline" type="button" data-category="pixel" aria-pressed="false">Pixel faces</button>
-          <button class="button outline" type="button" data-category="originals" aria-pressed="false">Originals</button>
+        <div class="collection-filters" role="group" aria-label="Collection filters">
+          <div>
+            <label for="collection-tag">Tag</label>
+            <select id="collection-tag" disabled><option value="">All tags</option></select>
+          </div>
+          <div>
+            <label for="collection-shape">Type</label>
+            <select id="collection-shape" disabled><option value="">All types</option></select>
+          </div>
         </div>
         <p id="collection-status" role="status"></p>
         <button class="button outline" id="collection-retry" type="button" hidden>Reload templates</button>
@@ -198,6 +201,7 @@
           <div class="template-details">
             <h2></h2>
             <p></p>
+            <div class="template-tags"></div>
             <label class="template-colors">Resolution
               <select data-template-resolution><option value="recommended">Recommended</option><option value="high">High</option></select>
             </label>
@@ -206,6 +210,11 @@
               <button class="button outline" type="button" data-template-action="edit"><svg class="icon"><use href="#pencil"></use></svg> Edit</button>
               <button class="button primary" type="button" data-template-action="work"><svg class="icon"><use href="#yarn"></use></svg> Crochet</button>
             </div>
+            <details class="template-source" hidden>
+              <summary>Source</summary>
+              <a target="_blank" rel="noreferrer"></a>
+              <p></p>
+            </details>
           </div>
         </article>
       </template>

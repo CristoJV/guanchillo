@@ -1,5 +1,18 @@
 {
-  "space": [
+  "patterns": [
+    "el-hierro",
+    "la-palma",
+    "la-gomera",
+    "tenerife",
+    "gran-canaria",
+    "fuerteventura",
+    "lanzarote",
+    "la-graciosa",
+    "tara-idol",
+    "triangular-pintadera",
+    "la-zarza-spiral",
+    "canary-dragon-tree",
+    "canarian-timple",
     "earth",
     "moon",
     "mercury",
@@ -8,18 +21,14 @@
     "jupiter",
     "saturn",
     "uranus",
-    "neptune"
-  ],
-  "holiday": [
+    "neptune",
     "nordic-bauble",
     "evergreen-bauble",
     "peppermint-bauble",
     "fir-tree",
     "snowflake",
     "holiday-gift",
-    "gingerbread"
-  ],
-  "pixel": [
+    "gingerbread",
     "blocky-explorer",
     "night-wisp",
     "moss-monster",
@@ -35,9 +44,7 @@
     "blush-spider",
     "lagoon-wanderer",
     "stone-watcher",
-    "frost-specter"
-  ],
-  "originals": [
+    "frost-specter",
     "atlantic-wave",
     "teide-dawn",
     "woven-diamond",

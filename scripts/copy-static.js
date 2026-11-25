@@ -10,8 +10,9 @@ for (const filename of ['index.html', 'styles.css', 'favicon.svg']) {
 const patterns = new URL('../patterns/', import.meta.url);
 const catalog = new URL('patterns/', output);
 const manifest = JSON.parse(readFileSync(new URL('index.json', patterns), 'utf8'));
-const keys = Object.values(manifest).flat();
-if (keys.some(key => typeof key !== 'string' || !/^[a-z0-9-]+$/.test(key) || key === 'index')) {
+const keys = manifest.patterns;
+if (!Array.isArray(keys) || new Set(keys).size !== keys.length ||
+  keys.some(key => typeof key !== 'string' || !/^[a-z0-9-]+$/.test(key) || key === 'index')) {
   throw new Error('Invalid template filename in patterns/index.json.');
 }
 rmSync(catalog, { recursive: true, force: true });
