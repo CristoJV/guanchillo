@@ -1,10 +1,11 @@
 {
-  "name": "ganchillo",
+  "name": "guanchillo",
   "private": true,
   "type": "module",
   "scripts": {
     "build": "tsc && node scripts/copy-static.js",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "test": "npm run build && node --test tests/model.test.js"
   },
   "devDependencies": {
     "typescript": "6.0.3"

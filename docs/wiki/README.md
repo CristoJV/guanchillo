@@ -1,14 +1,22 @@
-# Ganchillo user guide
+# Guanchillo user guide
 
 ## Design a pattern
 
 1. Select **New pattern**, give it a name and set the dimensions. You can also try the **Lava Diamond** example.
 2. Choose a color and use the **Pencil** to click or drag on the grid. The **Eraser** leaves stitches unassigned.
 3. Use **Undo** or **Redo** to revise your work. Each drag counts as one action.
-4. Choose **Apply size** to resize. The bottom-left corner stays in place. If you have started crocheting, Ganchillo asks before resetting your progress.
+4. Choose **Apply size** to resize. The bottom-left corner stays in place. If you have started crocheting, Guanchillo asks before resetting your progress.
 5. Use **Add color** to extend the palette, or use the pencil next to a color to edit or remove it. The count shows how many stitches use each color.
 
 Zoom in to work on details. Select **Pan** and drag to move around. **Fit to view** restores the overview.
+
+## Design a sphere
+
+Choose **Sphere** under **New pattern**, then enter a multiple of three from 6 to 126 rounds. Choose **Earth** to start with the supplied globe chart by @druidanu adapted to the rounded spiral. Drag the 3D preview or focus it and use the arrow keys to rotate.
+
+Paint the stitches in the six chart sections to update the globe. The spaces between the sections are gaps in the projection. The labels at the right show each round and its stitch count. A **+** spans the two stitches of an increase. A **−** marks a decrease. Zoom in to see these marks on larger charts.
+
+When following a sphere, crochet in a continuous spiral. The current stitch display tells you when to increase, decrease or work into the magic ring. Changing the number of rounds resamples your colors to fit the new chart. [Supergurumi's rounded sphere guide](https://www.supergurumi.com/es/tejer-esferas-y-bolas-de-cualquier-tamano)
 
 ## Save or transfer your work
 

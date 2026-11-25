@@ -1,6 +1,6 @@
-# Ganchillo
+# Guanchillo
 
-Design tapestry crochet patterns and follow them stitch by stitch. Ganchillo runs in the browser and supports versioned JSON files for sharing patterns and crochet progress.
+Design flat or spherical tapestry crochet patterns and follow them stitch by stitch. Guanchillo runs in the browser and supports versioned JSON files for sharing patterns and crochet progress.
 
 ## Run locally
 
@@ -12,11 +12,11 @@ npm run build
 python3 -m http.server 8000 --directory dist
 ```
 
-Open [Ganchillo at localhost:8000](http://localhost:8000). Run `npm run check` for type checking and rebuild after editing the source.
+Open [Guanchillo at localhost:8000](http://localhost:8000). Run `npm run check` for type checking and `npm test` to check the pattern model. Rebuild after editing the source.
 
 ## What is an `.mjs` file?
 
-An `.mjs` file is a JavaScript ES module. It uses standard `import` and `export` statements, and the extension tells Node.js to load it as a module. Ganchillo now has `.ts` source files that compile to `.js` ES modules. [Node.js documentation](https://nodejs.org/api/esm.html#enabling)
+An `.mjs` file is a JavaScript ES module. It uses standard `import` and `export` statements, and the extension tells Node.js to load it as a module. Guanchillo now has `.ts` source files that compile to `.js` ES modules. [Node.js documentation](https://nodejs.org/api/esm.html#enabling)
 
 ## Documentation
 

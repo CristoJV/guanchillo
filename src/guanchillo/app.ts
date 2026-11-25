@@ -1,9 +1,12 @@
 import {
-  colorRun, counts, examplePattern, limits, newPattern, newProgress,
+  chartRow, colorRun, counts, examplePattern, limits, newPattern, newProgress, newSphere,
   deserializePattern, resizePattern, serializePattern, tileAt, totalSteps,
   type GridPosition, type Pattern, type Progress,
 } from './model.js';
-import { makeGrid, traceLine } from './grid.js';
+import { earthPattern } from './earth.js';
+import { makeGlobe } from './globe.js';
+import { makeGrid } from './grid.js';
+import { isSphereSize, sphereLayout, sphereSizes, stitchOperation } from './sphere.js';
 import { createStorage, type Mode } from './storage.js';
 
 function byId(id: string): HTMLElement;
@@ -21,6 +24,8 @@ const palette = byId('palette');
 const cursorText = byId('grid-cursor');
 const fileInput = byId('file-input', 'input');
 const nameInput = byId('pattern-name', 'input');
+const editorGlobe = makeGlobe(byId('editor-globe', 'canvas'));
+const createGlobe = makeGlobe(byId('create-globe', 'canvas'));
 const number = new Intl.NumberFormat('en');
 const percent = new Intl.NumberFormat('en', { style: 'percent' });
 const format = (value: number) => number.format(value);
@@ -33,7 +38,7 @@ const storage = createStorage(message => {
 const grid = makeGrid({
   viewport, surface, shell: byId('grid-shell'), top: byId('ruler-top'), left: byId('ruler-left'),
   colors: byId('grid-colors', 'canvas'), done: byId('grid-done', 'canvas'), marker: byId('grid-marker'), guide: byId('guide-row'),
-  zoomOutput: byId('zoom-value'),
+  lines: byId('grid-lines'), zoomOutput: byId('zoom-value'),
 });
 
 const patterns = storage.patterns();
@@ -137,14 +142,26 @@ function updateHistory() {
 
 function refreshBoard() {
   const { rows, cols, cells } = pattern;
+  const sphere = pattern.shape === 'sphere';
   setText('board-title', pattern.name);
-  setText('board-meta', format(rows) + (rows === 1 ? ' row' : ' rows') + ' × ' +
-    format(cols) + (cols === 1 ? ' column' : ' columns') + ' · ' +
-    format(cells.length) + (cells.length === 1 ? ' stitch' : ' stitches'));
+  const dimensions = sphere ? format(rows) + ' rounds · ' + format(cols) + ' stitches at widest' :
+    format(rows) + (rows === 1 ? ' row' : ' rows') + ' × ' + format(cols) + (cols === 1 ? ' column' : ' columns');
+  setText('board-meta', dimensions + ' · ' + format(cells.length) + (cells.length === 1 ? ' stitch' : ' stitches'));
+  setText('size-row-name', sphere ? 'Rounds' : 'Rows');
+  byId('size-cols').hidden = sphere;
+  byId('sphere-size-note').hidden = !sphere;
+  byId('sphere-legend').hidden = !sphere;
+  byId('editor-sphere-view').hidden = !sphere;
   nameInput.value = pattern.name;
-  byId('rows', 'input').valueAsNumber = pattern.rows;
-  byId('cols', 'input').valueAsNumber = pattern.cols;
-  grid.drawPattern(pattern);
+  const rowsInput = byId('rows', 'input');
+  rowsInput.min = String(sphere ? sphereSizes.min : 1);
+  rowsInput.max = String(sphere ? sphereSizes.max : limits.dimension);
+  rowsInput.step = String(sphere ? sphereSizes.step : 1);
+  rowsInput.valueAsNumber = rows;
+  byId('cols', 'input').disabled = sphere;
+  byId('cols', 'input').valueAsNumber = cols;
+  grid.drawPattern(pattern, progress.direction);
+  updateGlobe();
   renderPalette();
   updateHistory();
   refreshCursor();
@@ -160,8 +177,8 @@ function selectPattern(selected: Pattern, keepMode = false, initialProgress?: Pr
   undo.length = redo.length = 0;
   setTool('paint');
   if (initialProgress) savePattern();
-  setMode(keepMode ? mode : 'edit');
   refreshBoard();
+  setMode(keepMode ? mode : 'edit');
   grid.zoom(0);
   viewport.scrollTop = viewport.scrollLeft = 0;
   if (mode === 'work') grid.reveal();
@@ -182,7 +199,7 @@ function setMode(nextMode: Mode) {
   setText('grid-shortcuts', working ? 'Space to advance · Left arrow to go back' :
     'Arrow keys to move · Space to paint');
   if (working) {
-    grid.drawPattern(pattern);
+    grid.drawPattern(pattern, progress.direction);
     grid.setupProgress(progress);
     renderProgress();
   } else {
@@ -217,7 +234,8 @@ function replacePattern(next: Pattern) {
   if (resized) {
     progress = newProgress(pattern);
     sessions.set(pattern.id, progress);
-    cursor = { x: Math.min(cursor.x, pattern.cols - 1), y: Math.min(cursor.y, pattern.rows - 1) };
+    const y = Math.min(cursor.y, pattern.rows - 1);
+    cursor = { x: Math.min(cursor.x, chartRow(pattern, y).stitches - 1), y };
   }
   color = Math.min(color, pattern.palette.length - 1);
   savePattern();
@@ -233,6 +251,7 @@ function approveResize(rows: number, cols: number) {
     return window.confirm('Resizing will reset your progress and starting point. Continue?');
   }
   if (rows < pattern.rows || cols < pattern.cols) {
+    if (pattern.shape === 'sphere') return window.confirm('The colors will be resampled to fit fewer rounds. Continue?');
     return window.confirm('Stitches outside the new grid will be cropped. Continue?');
   }
   return true;
@@ -252,8 +271,16 @@ function refreshCursor() {
   const focused = document.activeElement === surface;
   if (focused) {
     const { x, y } = cursor;
-    const name = pattern.palette[pattern.cells[y * pattern.cols + x]]?.name ?? 'Unassigned';
-    cursorText.textContent = 'Row ' + (pattern.rows - y) + ' · Column ' + (x + 1) + ' · ' + name;
+    const { stitches, start } = chartRow(pattern, y);
+    const name = pattern.palette[pattern.cells[start + x]]?.name ?? 'Unassigned';
+    const row = pattern.rows - y;
+    if (pattern.shape === 'sphere') {
+      const point = progress.direction === 'ltr' ? x + 1 : stitches - x;
+      cursorText.textContent = 'Round ' + row + ' · Stitch ' + point + ' of ' + stitches + ' · ' + name +
+        ' · ' + sphereOperation(row, point);
+    } else {
+      cursorText.textContent = 'Row ' + row + ' · Column ' + (x + 1) + ' · ' + name;
+    }
     grid.mark(cursor);
   } else {
     cursorText.textContent = '';
@@ -261,28 +288,54 @@ function refreshCursor() {
   }
 }
 
+function updateGlobe() {
+  if (pattern.shape === 'sphere') editorGlobe.show(pattern);
+}
+
+function sphereOperation(row: number, point: number): string {
+  const operations = {
+    'magic-ring': 'Single crochet into the magic ring',
+    'increase-first': 'Increase · first stitch into the same stitch',
+    'increase-second': 'Increase · second stitch into the same stitch',
+    decrease: 'Decrease · join the next two stitches',
+    single: 'Single crochet',
+  };
+  const round = sphereLayout(pattern.rows).rounds[row - 1];
+  return operations[stitchOperation(round, point)];
+}
+
 function renderProgress() {
-  const total = totalSteps(progress);
+  const total = totalSteps(pattern, progress);
   const ratio = progress.offset / total;
-  const current = tileAt(progress, progress.offset);
+  const current = tileAt(pattern, progress, progress.offset);
   const entry = current ? pattern.palette[pattern.cells[current.index]] : null;
   const run = current ? colorRun(pattern, progress) : 0;
   setText('percent', percent.format(Math.floor(progress.offset * 100 / total) / 100));
   setText('done-count', format(progress.offset) + ' of ' + format(total) + (total === 1 ? ' stitch' : ' stitches'));
   byId('progress-bar', 'progress').value = ratio * 100;
   setText('current-heading', current ? 'Current stitch' : 'Pattern complete');
+  const sphere = pattern.shape === 'sphere';
+  setText('current-row-name', sphere ? 'Round' : 'Row');
   setText('current-row', current?.row ?? '—');
   setText('current-point', current?.point ?? '—');
   setText('current-color', current ? entry?.name ?? 'Unassigned' : 'All stitches complete');
   setText('current-run', current && run ? run + (run === 1 ? ' stitch in this color' : ' stitches in this color') : '');
   setText('current-direction', current ? current.leftToRight ? 'Left to right' : 'Right to left' : '');
+  const operation = byId('current-operation');
+  operation.hidden = !sphere || !current;
+  operation.textContent = sphere && current ? sphereOperation(current.row, current.point) : '';
+  const roundNote = byId('round-note');
+  roundNote.hidden = !sphere || Boolean(current && current.row !== pattern.rows);
+  roundNote.textContent = roundNote.hidden ? '' : current ?
+    'Stuff the sphere before finishing this round.' : 'Fasten off and close the opening.';
   const swatch = byId('current-swatch');
   swatch.hidden = !current;
   swatch.style.backgroundColor = entry?.hex ?? '#fbf8ef';
   byId('next-stitch', 'button').disabled = !current;
   byId('previous-stitch', 'button').disabled = progress.offset === 0;
   cursorText.textContent = current ?
-    'Row ' + current.row + ' · Stitch ' + current.point + ' · ' + (entry?.name ?? 'Unassigned') + ' · ' + run + ' in a row' :
+    (sphere ? 'Round ' : 'Row ') + current.row + ' · Stitch ' + current.point + ' · ' +
+      (entry?.name ?? 'Unassigned') + ' · ' + run + ' in a row' + (operation.hidden ? '' : ' · ' + operation.textContent) :
     'Pattern complete';
   grid.mark(current, true);
   grid.reveal();
@@ -295,7 +348,7 @@ function saveProgress() {
 function move(amount: -1 | 1) {
   if (mode !== 'work') return;
   const next = progress.offset + amount;
-  if (next < 0 || next > totalSteps(progress)) return;
+  if (next < 0 || next > totalSteps(pattern, progress)) return;
   grid.updateStep(progress, Math.min(next, progress.offset), amount > 0);
   progress.offset = next;
   saveProgress();
@@ -303,12 +356,12 @@ function move(amount: -1 | 1) {
 }
 
 function paintAt(x: number, y: number, action: PaintAction) {
-  const index = y * pattern.cols + x;
+  const index = chartRow(pattern, y).start + x;
   const value = tool === 'erase' ? -1 : color;
   if (pattern.cells[index] === value) return;
   action.before ??= structuredClone(pattern);
   pattern.cells[index] = value;
-  grid.paintCell(index);
+  grid.paintCell(x, y);
 }
 
 function finishGesture() {
@@ -345,6 +398,7 @@ viewport.addEventListener('pointerdown', event => {
     surface.focus({ preventScroll: true });
     gesture = { type: 'stroke', id: event.pointerId, last: tile };
     paintAt(tile.x, tile.y, gesture);
+    if (gesture.before) updateGlobe();
   }
   event.preventDefault();
   viewport.setPointerCapture(event.pointerId);
@@ -362,8 +416,9 @@ viewport.addEventListener('pointermove', event => {
       active.last = null;
       return;
     }
-    traceLine(active.last ?? tile, tile, (x, y) => paintAt(x, y, active));
+    grid.traceStroke(active.last ?? tile, tile, (x, y) => paintAt(x, y, active));
     active.last = cursor = tile;
+    if (active.before) updateGlobe();
     refreshCursor();
   }
 });
@@ -418,10 +473,7 @@ document.addEventListener('keydown', event => {
   const arrow = arrows.get(event.key);
   if (arrow) {
     event.preventDefault();
-    cursor = {
-      x: Math.min(pattern.cols - 1, Math.max(0, cursor.x + arrow[0])),
-      y: Math.min(pattern.rows - 1, Math.max(0, cursor.y + arrow[1])),
-    };
+    cursor = grid.moveCursor(cursor, arrow[0], arrow[1]);
     refreshCursor();
     grid.reveal();
   } else if (event.key === ' ' || event.key === 'Enter') {
@@ -432,6 +484,7 @@ document.addEventListener('keydown', event => {
     if (!action.before) return;
     remember(action.before);
     savePattern();
+    updateGlobe();
     updateCounts();
     updateHistory();
     refreshCursor();
@@ -494,7 +547,7 @@ function renderLibrary() {
     const name = document.createElement('span');
     name.textContent = entry.name;
     const size = document.createElement('small');
-    size.textContent = entry.rows + ' × ' + entry.cols;
+    size.textContent = entry.shape === 'sphere' ? entry.rows + ' rounds' : entry.rows + ' × ' + entry.cols;
     open.append(name, size);
     if (entry.id === pattern.id) open.setAttribute('aria-current', 'true');
     open.addEventListener('click', () => {
@@ -547,7 +600,7 @@ function exportPattern() {
   const link = document.createElement('a');
   const slug = pattern.name.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   link.href = url;
-  link.download = (slug || 'pattern') + '.ganchillo.json';
+  link.download = (slug || 'pattern') + '.guanchillo.json';
   link.click();
   setTimeout(() => URL.revokeObjectURL(url), 3000);
   status('Pattern and progress exported as JSON.');
@@ -573,26 +626,80 @@ nameInput.addEventListener('change', () => {
   }
 });
 
-byId('create-form', 'form').addEventListener('submit', event => {
-  event.preventDefault();
-  const input = byId('new-name', 'input');
-  const name = input.value.trim();
-  if (!name) {
-    input.value = '';
-    input.reportValidity();
+const newShape = byId('new-shape', 'select');
+const newTemplate = byId('new-template', 'select');
+const newRounds = byId('new-rounds', 'input');
+const newName = byId('new-name', 'input');
+const patternDialog = byId('pattern-dialog', 'dialog');
+
+function sphereDraft(rounds: number, name: string): Pattern {
+  return newTemplate.value === 'earth' ? earthPattern(rounds, name) : newSphere(rounds, name);
+}
+
+function refreshCreation() {
+  const sphere = newShape.value === 'sphere';
+  patternDialog.dataset.shape = newShape.value;
+  byId('new-flat-fields').hidden = sphere;
+  byId('new-sphere-fields').hidden = !sphere;
+  byId('new-rows', 'input').disabled = sphere;
+  byId('new-cols', 'input').disabled = sphere;
+  newRounds.disabled = !sphere;
+  const rounds = newRounds.valueAsNumber;
+  const showPreview = sphere && isSphereSize(rounds);
+  byId('create-sphere-view').hidden = !showPreview;
+  if (!showPreview) {
+    setText('sphere-summary', '');
     return;
   }
-  const fresh = newPattern(byId('new-rows', 'input').valueAsNumber, byId('new-cols', 'input').valueAsNumber, name);
-  byId('pattern-dialog', 'dialog').close();
+  const { goreWidth, stitches } = sphereLayout(rounds);
+  setText('sphere-summary', format(goreWidth * 6) + ' stitches at widest · ' + format(stitches) + ' total');
+  createGlobe.show(sphereDraft(rounds, newName.value));
+}
+
+newShape.addEventListener('change', refreshCreation);
+newRounds.addEventListener('input', refreshCreation);
+newTemplate.addEventListener('change', () => {
+  if (newTemplate.value === 'earth' && !newName.value.trim()) newName.value = 'Earth';
+  refreshCreation();
+});
+
+byId('create-form', 'form').addEventListener('submit', event => {
+  event.preventDefault();
+  const name = newName.value.trim();
+  if (!name) {
+    newName.value = '';
+    newName.reportValidity();
+    return;
+  }
+  const fresh = newShape.value === 'sphere' ? sphereDraft(newRounds.valueAsNumber, name) :
+    newPattern(byId('new-rows', 'input').valueAsNumber, byId('new-cols', 'input').valueAsNumber, name);
+  patternDialog.close();
   selectPattern(fresh, false, newProgress(fresh));
   status('Created “' + fresh.name + '”.');
 });
 
+const startRow = byId('start-row', 'input');
+const startCol = byId('start-col', 'input');
+function updateStartLimit() {
+  const row = startRow.valueAsNumber;
+  if (!Number.isInteger(row) || row < 1 || row > pattern.rows) return;
+  const { stitches } = chartRow(pattern, pattern.rows - row);
+  startCol.max = String(stitches);
+  if (startCol.valueAsNumber > stitches) startCol.valueAsNumber = stitches;
+}
+
+startRow.addEventListener('input', updateStartLimit);
 byId('progress-settings').addEventListener('click', () => {
-  byId('start-row', 'input').max = String(pattern.rows);
-  byId('start-col', 'input').max = String(pattern.cols);
-  byId('start-row', 'input').valueAsNumber = progress.row;
-  byId('start-col', 'input').valueAsNumber = progress.col;
+  const sphere = pattern.shape === 'sphere';
+  setText('start-row-name', sphere ? 'Starting round' : 'Starting row');
+  setText('start-col-name', sphere ? 'Stitch from left' : 'Starting column');
+  setText('progress-origin-help', sphere ? 'Count rounds from the bottom and stitches from the left. Work in a continuous spiral.' :
+    'Count rows from the bottom and columns from the left.');
+  byId('start-alternate-field').hidden = sphere;
+  startRow.max = String(pattern.rows);
+  startRow.valueAsNumber = progress.row;
+  startCol.valueAsNumber = progress.col;
+  updateStartLimit();
   byId('start-direction', 'select').value = progress.direction;
   byId('start-alternate', 'input').checked = progress.alternate;
   byId('progress-reset-note').hidden = !progress.offset;
@@ -602,21 +709,23 @@ byId('progress-settings').addEventListener('click', () => {
 byId('progress-form').addEventListener('submit', event => {
   event.preventDefault();
   progress = newProgress(pattern, {
-    row: byId('start-row', 'input').valueAsNumber,
-    col: byId('start-col', 'input').valueAsNumber,
+    row: startRow.valueAsNumber,
+    col: startCol.valueAsNumber,
     direction: byId('start-direction', 'select').value === 'ltr' ? 'ltr' : 'rtl',
     alternate: byId('start-alternate', 'input').checked,
   });
   sessions.set(pattern.id, progress);
   saveProgress();
   byId('progress-dialog', 'dialog').close();
+  grid.drawPattern(pattern, progress.direction);
   grid.setupProgress(progress);
   renderProgress();
 });
 
 byId('new-pattern').addEventListener('click', () => {
   byId('create-form', 'form').reset();
-  byId('pattern-dialog', 'dialog').showModal();
+  refreshCreation();
+  patternDialog.showModal();
 });
 byId('library-open').addEventListener('click', () => {
   renderLibrary();

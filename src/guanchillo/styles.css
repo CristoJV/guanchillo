@@ -189,3 +189,68 @@ dialog p { color: var(--muted); font-size: 0.9rem; }
   .button { min-height: 2.75rem; }
   .pattern-actions { grid-template-columns: 1fr 2.75rem; }
 }
+
+/* Sphere charts and previews */
+.grid-shell.sphere { grid-template: 1.35rem auto / auto 4.25rem; }
+.sphere .ruler-top { grid-area: 1 / 1; grid-template-columns: repeat(6, calc(var(--gore-width) * var(--pitch))); }
+.sphere .ruler-left { grid-area: 2 / 2; justify-items: start; padding-inline-start: 0.65rem; white-space: nowrap; }
+.sphere .grid-surface { grid-area: 2 / 1; background: transparent; outline: none; }
+.sphere .grid-surface:focus-visible { outline: 3px solid #9b511d; outline-offset: 3px; }
+.sphere .grid-lines { background: none; }
+.chart-strip, .chart-operation {
+  position: absolute;
+  top: calc(var(--y) * var(--pitch));
+  left: calc(var(--x) * var(--pitch));
+  width: calc(var(--length) * var(--pitch));
+  height: var(--pitch);
+}
+.chart-strip {
+  background: repeating-linear-gradient(to right, #292b2050 0 1px, transparent 1px var(--pitch));
+  box-shadow: inset -1px 0 #292b2038, inset 0 -1px #292b2048, inset 0 1px #292b202e;
+}
+.chart-operation {
+  display: grid;
+  place-content: center;
+  color: #fffdf4;
+  font-size: clamp(0.64rem, calc(var(--pitch) * 0.66), 1.3rem);
+  font-weight: 800;
+  line-height: 1;
+  text-shadow: 0 0 2px #1d2924, 0 0 2px #1d2924, 0 1px 2px #1d2924;
+}
+.hide-operations .chart-operation { display: none; }
+.sphere-legend { display: flex; flex-basis: 100%; flex-wrap: wrap; gap: 0.3rem 0.8rem; }
+.sphere-legend b { display: inline-grid; place-items: center; width: 1.05rem; background: var(--soft-green); color: var(--dark-green); border-radius: 0.24rem; }
+.stitch-operation { margin-top: 0.62rem; padding: 0.4rem 0.55rem; border-radius: 0.4rem; background: var(--soft-green); color: var(--dark-green); font-size: 0.86rem; font-weight: 650; }
+.form-note, .globe-help { color: var(--muted); font-size: 0.82rem; }
+#resize-form:has(#size-cols[hidden]) .field-grid { grid-template-columns: minmax(0, 1fr); }
+#editor-sphere-view[hidden] + section { border-top: 0; }
+.globe-preview h3 { margin: 0 0 0.7rem; font-size: 1rem; }
+.globe-stage {
+  display: grid;
+  place-items: center;
+  border: 1px solid #e5dfd2;
+  border-radius: 0.65rem;
+  padding: 0.65rem;
+  background: radial-gradient(ellipse at 38% 34%, #f7f2e7, #ebe6d9);
+}
+.globe-stage canvas {
+  display: block;
+  width: min(100%, 15rem);
+  height: auto;
+  cursor: grab;
+  touch-action: none;
+  border-radius: 50%;
+  filter: drop-shadow(0.28rem 0.45rem 0.38rem #352d2440);
+}
+.globe-stage canvas:active { cursor: grabbing; }
+#editor-globe { width: min(100%, 12rem); }
+.globe-help { text-align: center; margin-top: 0.55rem; }
+.create-fields { display: grid; align-content: start; gap: 0.7rem; }
+.pattern-dialog[data-shape="sphere"] { width: min(47rem, calc(100% - 2rem)); }
+.pattern-dialog[data-shape="sphere"] .create-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 1.2rem; }
+.create-globe { padding: 0.8rem; border: 1px solid var(--line); border-radius: 0.65rem; }
+.create-globe > .globe-help { font-size: 0.82rem; }
+@media (max-width: 620px) {
+  .pattern-dialog[data-shape="sphere"] .create-layout { grid-template-columns: minmax(0, 1fr); gap: 0.85rem; }
+  .create-globe .globe-stage canvas { width: min(100%, 11rem); }
+}

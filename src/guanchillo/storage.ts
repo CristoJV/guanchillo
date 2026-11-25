@@ -7,15 +7,17 @@ interface Preferences {
   mode: Mode;
 }
 
-const prefix = 'ganchillo:v1:';
+const prefix = 'guanchillo:v1:';
+const legacyPrefix = 'ganchillo:v1:';
 const patternKey = (id: string) => prefix + 'pattern:' + id;
 const progressKey = (id: string) => prefix + 'progress:' + id;
 const preferencesKey = prefix + 'preferences';
+const oldKey = (key: string) => legacyPrefix + key.slice(prefix.length);
 
 export function createStorage(onError: (message: string) => void) {
   function read(key: string): unknown {
     try {
-      const value = localStorage.getItem(key);
+      const value = localStorage.getItem(key) ?? localStorage.getItem(oldKey(key));
       return value === null ? null : JSON.parse(value);
     } catch {
       onError('Some saved data could not be read.');
@@ -39,12 +41,16 @@ export function createStorage(onError: (message: string) => void) {
       try {
         for (let index = 0; index < localStorage.length; index++) {
           const key = localStorage.key(index);
-          if (!key?.startsWith(prefix + 'pattern:')) continue;
-          const raw = read(key);
+          if (!key) continue;
+          const keyPrefix = [patternKey(''), legacyPrefix + 'pattern:'].find(prefix => key.startsWith(prefix));
+          if (!keyPrefix) continue;
+          const storedId = key.slice(keyPrefix.length);
+          if (patterns.has(storedId)) continue;
+          const raw = read(patternKey(storedId));
           if (!raw) continue;
           try {
             const { id, ...data } = parsePattern(raw);
-            if (id && key === patternKey(id)) patterns.set(id, { ...data, id });
+            if (id && id === storedId) patterns.set(id, { ...data, id });
           } catch {
             onError('A saved pattern could not be opened.');
           }
@@ -66,8 +72,10 @@ export function createStorage(onError: (message: string) => void) {
     savePreferences: (preferences: Preferences) => write(preferencesKey, preferences),
     removePattern(id: string) {
       try {
-        localStorage.removeItem(patternKey(id));
-        localStorage.removeItem(progressKey(id));
+        for (const key of [patternKey(id), progressKey(id)]) {
+          localStorage.removeItem(key);
+          localStorage.removeItem(oldKey(key));
+        }
         return true;
       } catch {
         onError('Could not delete the pattern from this browser.');

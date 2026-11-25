@@ -1,4 +1,5 @@
-import { tileAt, type GridPosition, type Pattern, type Progress } from './model.js';
+import { chartRow, tileAt, type GridPosition, type Pattern, type Progress } from './model.js';
+import { gores, projectedStitch, projectedX, specialStitches, sphereLayout } from './sphere.js';
 
 interface GridElements {
   viewport: HTMLElement;
@@ -10,6 +11,7 @@ interface GridElements {
   done: HTMLCanvasElement;
   marker: HTMLElement;
   guide: HTMLElement;
+  lines: HTMLElement;
   zoomOutput: HTMLElement;
 }
 
@@ -23,13 +25,14 @@ function canvasContext(canvas: HTMLCanvasElement, options?: CanvasRenderingConte
 }
 
 export function makeGrid(elements: GridElements) {
-  const { viewport, shell, top, left, surface, colors, done, marker, guide, zoomOutput } = elements;
-  const ink = canvasContext(colors, { alpha: false });
+  const { viewport, shell, top, left, surface, colors, done, marker, guide, lines, zoomOutput } = elements;
+  const ink = canvasContext(colors);
   const overlay = canvasContext(done);
   let pattern: Pattern;
   let scale = 1;
   let pitch = 1;
   let anchor: GridPosition | null = null;
+  let direction: Progress['direction'] = 'rtl';
 
   function labelRuler(element: HTMLElement, count: number, available: number, descending: boolean) {
     const step = Math.max(1, Math.ceil(24 / available));
@@ -46,7 +49,8 @@ export function makeGrid(elements: GridElements) {
   }
 
   function layout() {
-    const width = Math.max(1, viewport.clientWidth - 58);
+    const sphere = pattern.shape === 'sphere';
+    const width = Math.max(1, viewport.clientWidth - (sphere ? 114 : 58));
     const height = Math.max(1, viewport.clientHeight - 58);
     const fit = Math.max(0.8, Math.min(52, width / pattern.cols, height / pattern.rows));
     scale = Math.min(scale, 72 / fit);
@@ -56,33 +60,117 @@ export function makeGrid(elements: GridElements) {
     shell.style.setProperty('--columns', String(pattern.cols));
     shell.style.setProperty('--rows', String(pattern.rows));
     shell.classList.toggle('fine', pitch < 7);
-    labelRuler(top, pattern.cols, pitch, false);
-    labelRuler(left, pattern.rows, pitch, true);
+    shell.classList.toggle('hide-operations', pitch < 11);
+    if (sphere) {
+      const { rounds, goreWidth } = sphereLayout(pattern.rows);
+      shell.style.setProperty('--gore-width', String(goreWidth));
+      labelRuler(top, gores, goreWidth * pitch, false);
+      const labels = [...rounds].reverse().map(round => {
+        const label = document.createElement('span');
+        if (round.number === 1 || round.number === pattern.rows ||
+          round.number % Math.max(1, Math.ceil(15 / pitch)) === 0) {
+          label.textContent = round.number + ' · ' + round.stitches;
+        }
+        return label;
+      });
+      left.replaceChildren(...labels);
+    } else {
+      labelRuler(top, pattern.cols, pitch, false);
+      labelRuler(left, pattern.rows, pitch, true);
+    }
   }
 
-  function paintCell(index: number) {
-    const color = pattern.palette[pattern.cells[index]];
+  function displayX(tile: GridPosition) {
+    if (pattern.shape !== 'sphere') return tile.x;
+    const { goreWidth, rounds } = sphereLayout(pattern.rows);
+    return projectedX(goreWidth, rounds[pattern.rows - tile.y - 1], tile.x);
+  }
+
+  function columnAt(x: number, y: number, nearest = false): number | null {
+    if (pattern.shape !== 'sphere') return Math.floor(x);
+    const { goreWidth, rounds } = sphereLayout(pattern.rows);
+    return projectedStitch(goreWidth, rounds[pattern.rows - y - 1], x, nearest);
+  }
+
+  function drawSphereLines() {
+    const fragment = document.createDocumentFragment();
+    if (pattern.shape === 'sphere') {
+      const { rounds, goreWidth } = sphereLayout(pattern.rows);
+      for (const round of rounds) {
+        const y = pattern.rows - round.number;
+        for (let gore = 0; gore < gores; gore++) {
+          const strip = document.createElement('span');
+          strip.className = 'chart-strip';
+          strip.style.setProperty('--x', String(projectedX(goreWidth, round, gore * round.perGore)));
+          strip.style.setProperty('--y', String(y));
+          strip.style.setProperty('--length', String(round.perGore));
+          fragment.append(strip);
+        }
+        for (const stitch of specialStitches(round, direction === 'ltr')) {
+          const symbol = document.createElement('span');
+          symbol.className = 'chart-operation';
+          symbol.textContent = round.kind === 'increase' ? '+' : '−';
+          symbol.style.setProperty('--x', String(projectedX(goreWidth, round, stitch)));
+          symbol.style.setProperty('--y', String(y));
+          symbol.style.setProperty('--length', round.kind === 'increase' ? '2' : '1');
+          fragment.append(symbol);
+        }
+      }
+    }
+    lines.replaceChildren(fragment);
+  }
+
+  function paintCell(x: number, y: number) {
+    const color = pattern.palette[pattern.cells[chartRow(pattern, y).start + x]];
+    const horizontal = pattern.shape === 'sphere' ? 2 : 1;
     ink.fillStyle = color?.hex ?? blank;
-    ink.fillRect(index % pattern.cols, Math.floor(index / pattern.cols), 1, 1);
+    ink.fillRect(displayX({ x, y }) * horizontal, y, horizontal, 1);
   }
 
-  function drawPattern(next: Pattern) {
+  function drawPattern(next: Pattern, nextDirection: Progress['direction']) {
+    const changedGeometry = !pattern || pattern.rows !== next.rows || pattern.cols !== next.cols || pattern.shape !== next.shape;
+    const changedDirection = direction !== nextDirection;
     pattern = next;
-    if (colors.width !== pattern.cols || colors.height !== pattern.rows || !shell.style.getPropertyValue('--pitch')) {
-      colors.width = pattern.cols;
+    direction = nextDirection;
+    if (changedGeometry) {
+      shell.classList.toggle('sphere', pattern.shape === 'sphere');
+      colors.width = pattern.cols * (pattern.shape === 'sphere' ? 2 : 1);
       colors.height = pattern.rows;
-      done.width = pattern.cols * progressPixels;
+      done.width = colors.width * progressPixels;
       done.height = pattern.rows * progressPixels;
       layout();
     }
-    for (let index = 0; index < pattern.cells.length; index++) paintCell(index);
+    if (changedGeometry || changedDirection) drawSphereLines();
+    for (let y = 0; y < pattern.rows; y++) {
+      const { stitches } = chartRow(pattern, y);
+      for (let x = 0; x < stitches; x++) paintCell(x, y);
+    }
   }
 
   function positionAt(event: PointerEvent): GridPosition | null {
     const rect = surface.getBoundingClientRect();
-    const x = Math.floor((event.clientX - rect.left) * pattern.cols / rect.width);
+    const x = (event.clientX - rect.left) * pattern.cols / rect.width;
     const y = Math.floor((event.clientY - rect.top) * pattern.rows / rect.height);
-    return x >= 0 && y >= 0 && x < pattern.cols && y < pattern.rows ? { x, y } : null;
+    if (x < 0 || x >= pattern.cols || y < 0 || y >= pattern.rows) return null;
+    const column = columnAt(x, y);
+    return column === null ? null : { x: column, y };
+  }
+
+  function moveCursor(tile: GridPosition, dx: number, dy: number): GridPosition {
+    const y = Math.min(pattern.rows - 1, Math.max(0, tile.y + dy));
+    const x = y === tile.y ? tile.x : columnAt(displayX(tile) + 0.5, y, true) ?? 0;
+    return { x: Math.min(chartRow(pattern, y).stitches - 1, Math.max(0, x + dx)), y };
+  }
+
+  function traceStroke(from: GridPosition, to: GridPosition, visit: (x: number, y: number) => void) {
+    if (pattern.shape !== 'sphere') {
+      traceLine(from, to, visit);
+      return;
+    }
+    traceLine({ x: displayX(from) * 2 + 1, y: from.y }, { x: displayX(to) * 2 + 1, y: to.y }, (x, y) => {
+      const column = columnAt(x / 2, y);
+      if (column !== null) visit(column, y);
+    });
   }
 
   function mark(tile: GridPosition | null, showRow = false) {
@@ -90,7 +178,7 @@ export function makeGrid(elements: GridElements) {
     marker.hidden = !tile;
     guide.hidden = !tile || !showRow;
     if (!tile) return;
-    marker.style.setProperty('--x', String(tile.x));
+    marker.style.setProperty('--x', String(displayX(tile)));
     marker.style.setProperty('--y', String(tile.y));
     guide.style.setProperty('--y', String(tile.y));
   }
@@ -109,29 +197,35 @@ export function makeGrid(elements: GridElements) {
   function setupProgress(progress: Progress) {
     done.hidden = false;
     overlay.clearRect(0, 0, done.width, done.height);
-    const start = tileAt(progress, 0);
+    const start = tileAt(pattern, progress, 0);
     if (!start) return;
     overlay.fillStyle = 'rgba(249,246,236,0.84)';
-    const y = start.y * progressPixels;
-    const x = start.x * progressPixels;
-    overlay.fillRect(0, y + progressPixels, done.width, done.height - y - progressPixels);
-    if (start.leftToRight) overlay.fillRect(0, y, x, progressPixels);
-    else overlay.fillRect(x + progressPixels, y, done.width - x - progressPixels, progressPixels);
+    for (let y = start.y; y < pattern.rows; y++) {
+      const { stitches } = chartRow(pattern, y);
+      const from = y === start.y && !start.leftToRight ? start.x + 1 : 0;
+      const to = y === start.y && start.leftToRight ? start.x : stitches;
+      for (let x = from; x < to; x++) {
+        const width = (pattern.shape === 'sphere' ? 2 : 1) * progressPixels;
+        overlay.fillRect(displayX({ x, y }) * width, y * progressPixels, width, progressPixels);
+      }
+    }
     for (let offset = 0; offset < progress.offset; offset++) updateStep(progress, offset, true);
   }
 
   function updateStep(progress: Progress, offset: number, completed: boolean) {
-    const tile = tileAt(progress, offset);
+    const tile = tileAt(pattern, progress, offset);
     if (!tile) return;
-    const x = tile.x * progressPixels;
+    const horizontal = pattern.shape === 'sphere' ? 2 : 1;
+    const width = horizontal * progressPixels;
+    const x = displayX(tile) * width;
     const y = tile.y * progressPixels;
     if (completed) {
       overlay.fillStyle = 'rgba(31,55,46,0.47)';
-      overlay.fillRect(x, y, progressPixels, progressPixels);
+      overlay.fillRect(x, y, width, progressPixels);
       overlay.fillStyle = 'rgba(255,252,241,0.92)';
-      overlay.fillRect(x + 1, y + 1, 1, 1);
+      overlay.fillRect(x + horizontal, y + 1, horizontal, 1);
     } else {
-      overlay.clearRect(x, y, progressPixels, progressPixels);
+      overlay.clearRect(x, y, width, progressPixels);
     }
   }
 
@@ -143,7 +237,7 @@ export function makeGrid(elements: GridElements) {
   }).observe(viewport);
 
   return {
-    drawPattern, paintCell, positionAt, mark, reveal, setupProgress, updateStep,
+    drawPattern, paintCell, positionAt, moveCursor, traceStroke, mark, reveal, setupProgress, updateStep,
     hideProgress() { done.hidden = true; },
     zoom(amount: number) {
       scale = Math.max(0.5, Math.min(32, amount === 0 ? 1 : scale * amount));

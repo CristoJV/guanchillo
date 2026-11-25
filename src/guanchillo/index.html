@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#faf8f3">
   <meta name="description" content="Design tapestry crochet patterns and follow them stitch by stitch.">
-  <title>Ganchillo · Tapestry crochet patterns</title>
+  <title>Guanchillo · Tapestry crochet patterns</title>
   <link rel="icon" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
   <script type="module" src="app.js"></script>
@@ -36,9 +36,9 @@
   </svg>
   <header class="site-header">
     <div class="header-inner">
-      <a class="brand" href="./" aria-label="Ganchillo home">
+      <a class="brand" href="./" aria-label="Guanchillo home">
         <span class="brand-mark"><svg class="icon"><use href="#yarn"></use></svg></span>
-        <span>Ganchillo</span>
+        <span>Guanchillo</span>
       </a>
       <nav class="mode-switch" aria-label="Workspace mode">
         <button type="button" id="edit-mode" aria-pressed="true"><svg class="icon"><use href="#pencil"></use></svg> Design</button>
@@ -79,9 +79,10 @@
           <h2>Grid</h2>
           <form id="resize-form">
             <div class="field-grid">
-              <label>Rows <input id="rows" type="number" min="1" max="256" required></label>
-              <label>Columns <input id="cols" type="number" min="1" max="256" required></label>
+              <label><span id="size-row-name">Rows</span><input id="rows" type="number" min="1" max="256" required></label>
+              <label id="size-cols">Columns <input id="cols" type="number" min="1" max="256" required></label>
             </div>
+            <p class="form-note" id="sphere-size-note" hidden>Use a multiple of 3 from 6 to 126.</p>
             <button class="button outline full" type="submit">Apply size</button>
           </form>
         </section>
@@ -108,7 +109,7 @@
               <div id="grid-surface" class="grid-surface" role="group" tabindex="0" aria-label="Pattern grid" aria-describedby="grid-shortcuts">
                 <canvas id="grid-colors" aria-hidden="true"></canvas>
                 <canvas id="grid-done" aria-hidden="true" hidden></canvas>
-                <span class="grid-lines" aria-hidden="true"></span>
+                <span id="grid-lines" class="grid-lines" aria-hidden="true"></span>
                 <span id="guide-row" class="guide-row" aria-hidden="true" hidden></span>
                 <span id="grid-marker" class="grid-marker" aria-hidden="true" hidden></span>
               </div>
@@ -116,12 +117,20 @@
           </div>
         </div>
         <footer class="board-footer">
+          <span id="sphere-legend" class="sphere-legend" hidden><span><b>+</b> Increase over two stitches</span><span><b>−</b> Decrease</span><span>Round · stitch count</span></span>
           <span id="grid-shortcuts" class="grid-shortcuts">Arrow keys to move · Space to paint</span>
           <span id="grid-cursor" class="grid-cursor" aria-live="polite"></span>
         </footer>
       </section>
 
       <aside id="edit-details" class="panel details-panel" aria-label="Pattern and palette">
+        <section class="globe-preview" id="editor-sphere-view" aria-labelledby="editor-sphere-title" hidden>
+          <h2 id="editor-sphere-title">3D preview</h2>
+          <div class="globe-stage">
+            <canvas id="editor-globe" width="256" height="256" tabindex="0" role="img" aria-label="Rotatable 3D preview of the current sphere" aria-describedby="editor-globe-help"></canvas>
+          </div>
+          <p class="globe-help" id="editor-globe-help">Drag or use arrow keys to rotate.</p>
+        </section>
         <section>
           <h2>My pattern</h2>
           <label class="name-field">Name <input id="pattern-name" type="text" maxlength="80" required></label>
@@ -149,11 +158,13 @@
         <section>
           <h2 id="current-heading">Current stitch</h2>
           <dl class="coordinates">
-            <div><dt>Row</dt><dd id="current-row">—</dd></div>
+            <div><dt id="current-row-name">Row</dt><dd id="current-row">—</dd></div>
             <div><dt>Stitch</dt><dd id="current-point">—</dd></div>
           </dl>
           <div class="current-color"><span class="swatch" id="current-swatch"></span><div><strong id="current-color">—</strong><p id="current-run"></p></div></div>
+          <p class="stitch-operation" id="current-operation" hidden></p>
           <p class="direction" id="current-direction"></p>
+          <p class="direction" id="round-note" hidden></p>
         </section>
         <section class="follow-actions">
           <button class="button primary full" id="next-stitch" type="button">Next stitch</button>
@@ -165,13 +176,33 @@
     <footer class="page-footer"><span id="app-status" role="status">Patterns are saved in this browser.</span></footer>
   </main>
 
-  <dialog id="pattern-dialog" aria-labelledby="pattern-dialog-title">
+  <dialog id="pattern-dialog" class="pattern-dialog" aria-labelledby="pattern-dialog-title">
     <form id="create-form">
       <div class="dialog-heading"><h2 id="pattern-dialog-title">New pattern</h2><button type="button" class="icon-button" data-close="pattern-dialog" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
-      <label>Name <input id="new-name" type="text" maxlength="80" required autofocus></label>
-      <div class="field-grid">
-        <label>Rows <input id="new-rows" type="number" min="1" max="256" value="24" required></label>
-        <label>Columns <input id="new-cols" type="number" min="1" max="256" value="24" required></label>
+      <div class="create-layout">
+        <div class="create-fields">
+          <label>Name <input id="new-name" type="text" maxlength="80" required autofocus></label>
+          <label>Shape
+            <select id="new-shape"><option value="flat">Flat grid</option><option value="sphere">Sphere</option></select>
+          </label>
+          <div class="field-grid" id="new-flat-fields">
+            <label>Rows <input id="new-rows" type="number" min="1" max="256" value="24" required></label>
+            <label>Columns <input id="new-cols" type="number" min="1" max="256" value="24" required></label>
+          </div>
+          <div class="create-fields" id="new-sphere-fields" hidden>
+            <label>Rounds <input id="new-rounds" type="number" min="6" max="126" step="3" value="21" aria-describedby="new-rounds-note" required disabled></label>
+            <p class="form-note" id="new-rounds-note">Use a multiple of 3 from 6 to 126.</p>
+            <label>Template <select id="new-template"><option value="blank">Blank</option><option value="earth">Earth</option></select></label>
+            <p class="form-note" id="sphere-summary" aria-live="polite"></p>
+          </div>
+        </div>
+        <section class="globe-preview create-globe" id="create-sphere-view" aria-labelledby="create-sphere-title" hidden>
+          <h3 id="create-sphere-title">3D preview</h3>
+          <div class="globe-stage">
+            <canvas id="create-globe" width="256" height="256" tabindex="0" role="img" aria-label="Rotatable 3D preview of the new sphere" aria-describedby="create-globe-help"></canvas>
+          </div>
+          <p class="globe-help" id="create-globe-help">Drag or use arrow keys to rotate.</p>
+        </section>
       </div>
       <div class="dialog-actions"><button class="button primary" type="submit">Create pattern</button></div>
     </form>
@@ -196,15 +227,15 @@
   <dialog id="progress-dialog" aria-labelledby="progress-title">
     <form id="progress-form">
       <div class="dialog-heading"><h2 id="progress-title">Set starting point</h2><button type="button" class="icon-button" data-close="progress-dialog" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
-      <p>Count rows from the bottom and columns from the left.</p>
+      <p id="progress-origin-help">Count rows from the bottom and columns from the left.</p>
       <div class="field-grid">
-        <label>Starting row <input id="start-row" type="number" min="1" required autofocus></label>
-        <label>Starting column <input id="start-col" type="number" min="1" required></label>
+        <label><span id="start-row-name">Starting row</span><input id="start-row" type="number" min="1" required autofocus></label>
+        <label><span id="start-col-name">Starting column</span><input id="start-col" type="number" min="1" required></label>
       </div>
       <label>Starting direction
         <select id="start-direction"><option value="rtl">Right to left</option><option value="ltr">Left to right</option></select>
       </label>
-      <label class="check-field"><input id="start-alternate" type="checkbox"> Alternate direction on each row</label>
+      <label class="check-field" id="start-alternate-field"><input id="start-alternate" type="checkbox"> Alternate direction on each row</label>
       <p id="progress-reset-note" hidden>Applying the starting point resets your stitch count.</p>
       <div class="dialog-actions"><button class="button primary" type="submit">Apply starting point</button></div>
     </form>
