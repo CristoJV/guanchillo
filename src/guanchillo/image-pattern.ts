@@ -1,4 +1,9 @@
-import { counts, limits, type Pattern } from './model.js';
+import { counts, limits, type Dimensions, type Pattern } from './model.js';
+
+export function fitImageToGrid(width: number, height: number, bounds: Dimensions): Dimensions {
+  const scale = Math.min(bounds.cols / width, bounds.rows / height);
+  return { rows: Math.max(1, Math.round(height * scale)), cols: Math.max(1, Math.round(width * scale)) };
+}
 
 type RGB = [number, number, number];
 

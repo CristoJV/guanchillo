@@ -89,7 +89,18 @@
             </div>
             <p class="form-note" id="sphere-size-note" hidden>Use a multiple of 3 from 6 to 126.</p>
             <button class="button outline full" type="submit">Apply size</button>
+            <button class="button outline full" id="reference-fit" type="button" aria-describedby="reference-fit-note" hidden>Fit grid to image</button>
+            <p class="form-note" id="reference-fit-note" hidden>Fit uses Rows and Columns as maximums.</p>
           </form>
+        </section>
+        <section id="reference-tools" hidden>
+          <h2>Reference image</h2>
+          <label class="check-field"><input id="reference-visible" type="checkbox"> Show reference</label>
+          <div class="reference-actions">
+            <button class="button outline" id="reference-move" type="button" data-tool="reference" aria-pressed="false" aria-keyshortcuts="R"><svg class="icon"><use href="#hand"></use></svg> Move image <kbd>R</kbd></button>
+            <button class="button outline" id="reference-center" type="button">Center image</button>
+            <button class="button subtle" id="reference-remove" type="button">Remove image</button>
+          </div>
         </section>
       </aside>
 
@@ -112,6 +123,7 @@
               <div class="ruler ruler-top" id="ruler-top" aria-hidden="true"></div>
               <div class="ruler ruler-left" id="ruler-left" aria-hidden="true"></div>
               <div id="grid-surface" class="grid-surface" role="group" tabindex="0" aria-label="Pattern grid" aria-describedby="grid-shortcuts">
+                <div id="grid-reference" class="grid-reference" aria-hidden="true" hidden><img id="grid-reference-image" alt="" draggable="false"></div>
                 <canvas id="grid-colors" aria-hidden="true"></canvas>
                 <canvas id="grid-done" aria-hidden="true" hidden></canvas>
                 <span id="grid-lines" class="grid-lines" aria-hidden="true"></span>
@@ -122,7 +134,7 @@
           </div>
         </div>
         <footer class="board-footer">
-          <div class="stitch-legend"><span><b>X</b> Single crochet</span><span id="sphere-legend" hidden><span><b>V</b> Increase</span><span><b>Λ</b> Decrease</span><span>Round · stitch count</span></span></div>
+          <div class="stitch-legend" id="stitch-legend" hidden><span><b>X</b> Single crochet</span><span id="sphere-legend" hidden><span><b>V</b> Increase</span><span><b>Λ</b> Decrease</span><span>Round · stitch count</span></span></div>
           <span id="grid-shortcuts" class="grid-shortcuts">Arrow keys to move · Space to paint</span>
           <span id="grid-cursor" class="grid-cursor" aria-live="polite"></span>
         </footer>
@@ -282,7 +294,10 @@
           <p id="image-preview-status" class="form-note">Choose an image to see its stitch preview.</p>
         </section>
       </div>
-      <div class="dialog-actions"><button class="button primary" id="image-create" type="submit" disabled>Create pattern</button></div>
+      <div class="dialog-actions image-actions">
+        <button class="button outline" id="image-use-reference" type="button" disabled>Use as reference</button>
+        <button class="button primary" id="image-create" type="submit" disabled>Create pattern</button>
+      </div>
     </form>
   </dialog>
 

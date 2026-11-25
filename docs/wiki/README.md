@@ -17,6 +17,13 @@ Zoom in to work on details. Select **Pan** and drag to move around. **Fit to vie
 3. Pick **Automatic colors** and set the maximum, or pick **My colors** to add and adjust the exact yarn colors you plan to use. Four is the default. New charts allow up to eight yarn colors.
 4. Check the stitch preview, then select **Create pattern** to open it in **Design**. Transparent pixels become unassigned stitches.
 
+## Trace a reference image
+
+1. Open **Import image**, choose an image and select **Use as reference**. It appears beneath the squares of the current pattern. Painted squares remain translucent while the reference is visible.
+2. For a flat pattern, enter the maximum **Rows** and **Columns** you want and choose **Fit grid to image**. This fits the image proportions within those dimensions and centers the reference. The usual resize rules apply to existing stitches and progress.
+3. Select **Move image** and drag on the grid, or press the arrow keys to move the image one square at a time. **Center image** restores the starting position. Switch to **Pencil** or **Eraser** to edit squares.
+4. Toggle **Show reference** to check the chart colors, or choose **Remove image** to clear the layer. Each reference stays with its pattern while the page is open.
+
 ## Browse the pattern collection
 
 Open **Collection** and use **Tag** and **Type** together to find charts. You can also select a tag on a card to apply it. Pick **Recommended** for the suggested size or **High** for the master size when both are available. Use **Colors** to choose how many yarns to use, up to the number available in the master. The preview updates before you choose **Edit** or **Crochet**. Returning with the same settings reopens the local copy, including its progress.
@@ -31,7 +38,7 @@ Use **Recommended** for the approximate Solar System scale when working with the
 
 Choose **Sphere** under **New pattern**, then enter a multiple of three from 6 to 126 rounds. The 3D preview starts with the first round at the top of the finished sphere. Drag it or focus it and use the arrow keys to rotate.
 
-Paint the stitches in the six chart sections to update the globe. The spaces between the sections are gaps in the projection. The labels at the right show each round and its stitch count. **X** is a single crochet, **V** spans the two stitches of an increase, and **Λ** marks a decrease. Zoom in to see these marks on larger charts.
+Paint the squares in the six chart sections to update the globe. The spaces between the sections are gaps in the projection. The labels at the right show each round and its stitch count. In **Crochet**, **X** is a single crochet, **V** spans the two stitches of an increase, and **Λ** marks a decrease. Zoom in to see these marks on larger charts.
 
 In **Design**, the chart matches the finished sphere, with the first round at the top. In **Crochet**, the chart turns 180° so you work from the first round at the bottom.
 
@@ -54,6 +61,7 @@ Changes save in this browser as you work. **Save** confirms the current copy, an
 | Where | Keys |
 | --- | --- |
 | Pattern grid in Design | Arrow keys to move, Space or Enter to apply the active tool |
-| Grid or tool panel in Design | P for Pencil, E for Eraser, H for Pan |
+| Grid or tool panel in Design | P for Pencil, E for Eraser, H for Pan, R for Move image when the reference is visible |
+| Grid with Move image selected | Arrow keys to nudge the reference by one square |
 | Undo or redo | Ctrl or Cmd + Z to undo, Ctrl or Cmd + Shift + Z to redo. Ctrl or Cmd + Y also redoes |
 | Crochet mode | Space, Enter or Right arrow to start or advance, Left arrow to go back. Space and Enter activate the focused button if there is one |

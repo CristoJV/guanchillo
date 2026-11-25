@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { deriveTemplate, parseTemplate } from '../dist/collection.js';
-import { quantizeImage, reducePatternPalette } from '../dist/image-pattern.js';
+import { fitImageToGrid, quantizeImage, reducePatternPalette } from '../dist/image-pattern.js';
 import {
   chartRow, copyPattern, deserializePattern, hasStarted, jumpToStitch, makeColorGuide, newPattern, newProgress, newSphere,
   parsePattern, resizePattern, serializePattern, tileAt, totalSteps,
@@ -140,6 +140,14 @@ test('saved progress distinguishes Start from zero completed stitches and reads 
   const invalid = { ...ready, started: 'yes' };
   assert.throws(() => serializePattern(pattern, invalid), /saved progress/);
   assert.throws(() => deserializePattern(JSON.stringify({ ...pattern, progress: invalid })), /saved progress/);
+});
+
+test('image fitting uses the available grid dimensions and keeps at least one stitch per axis', () => {
+  const bounds = { rows: 13, cols: 20 };
+  assert.deepEqual(fitImageToGrid(800, 400, bounds), { rows: 10, cols: 20 });
+  assert.deepEqual(fitImageToGrid(400, 800, bounds), { rows: 13, cols: 7 });
+  assert.deepEqual(fitImageToGrid(8, 8, bounds), { rows: 13, cols: 13 });
+  assert.deepEqual(fitImageToGrid(1, 1000, bounds), { rows: 13, cols: 1 });
 });
 
 test('image quantization respects the color budget and keeps transparent stitches unassigned', () => {

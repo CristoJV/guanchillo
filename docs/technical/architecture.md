@@ -73,6 +73,8 @@ The 32 × 32 island charts are north-up adaptations of the generalized coastline
 
 Image import downsamples a local image with Canvas. Automatic color selection uses weighted median cut on the downsampled pixels. A fixed palette maps each pixel to the closest chosen color. Transparency is represented by `-1`, just like an erased cell.
 
+Design can also display the image beneath the color canvas as a local reference. The reference uses the image's original proportions and stores its offset in grid units so zoom preserves its alignment. References are scoped to a pattern for the lifetime of the page. Flat charts can fit their dimensions to the image within the row and column limits entered in the editor.
+
 ## Browser storage
 
 | Browser storage key | Content |

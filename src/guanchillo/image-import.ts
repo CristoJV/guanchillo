@@ -1,5 +1,5 @@
 import { byId } from './dom.js';
-import { quantizeImage } from './image-pattern.js';
+import { fitImageToGrid, quantizeImage } from './image-pattern.js';
 import { limits, newPattern, type Pattern } from './model.js';
 import { drawFlatPreview } from './preview.js';
 
@@ -7,7 +7,8 @@ const maxFileBytes = 20_000_000;
 const maxImagePixels = 24_000_000;
 const defaultPalette = ['#244d45', '#c46f57', '#f4e6c8', '#325f80'];
 
-export function makeImageImporter(onCreate: (pattern: Pattern) => void) {
+export function makeImageImporter(onCreate: (pattern: Pattern) => void,
+  onReference: (file: File, width: number, height: number) => void) {
   const dialog = byId('image-dialog', 'dialog');
   const form = byId('image-form', 'form');
   const file = byId('image-file', 'input');
@@ -18,6 +19,7 @@ export function makeImageImporter(onCreate: (pattern: Pattern) => void) {
   const paletteList = byId('image-custom-colors');
   const add = byId('image-color-add', 'button');
   const create = byId('image-create', 'button');
+  const useReference = byId('image-use-reference', 'button');
   const preview = byId('image-preview', 'canvas');
   const previewStatus = byId('image-preview-status');
   const error = byId('image-error');
@@ -104,10 +106,13 @@ export function makeImageImporter(onCreate: (pattern: Pattern) => void) {
 
   file.addEventListener('change', async () => {
     const selected = file.files?.[0];
+    const originalRows = rows.value;
+    const originalCols = cols.value;
     const current = ++revision;
     bitmap?.close();
     bitmap = undefined;
     create.disabled = true;
+    useReference.disabled = true;
     preview.hidden = true;
     showError('');
     if (!selected) {
@@ -131,9 +136,12 @@ export function makeImageImporter(onCreate: (pattern: Pattern) => void) {
         showError('Choose an image of up to 24 megapixels.');
       } else {
         bitmap = decoded;
-        const scale = Math.min(1, 48 / Math.max(bitmap.width, bitmap.height));
-        cols.valueAsNumber = Math.max(1, Math.round(bitmap.width * scale));
-        rows.valueAsNumber = Math.max(1, Math.round(bitmap.height * scale));
+        const size = fitImageToGrid(decoded.width, decoded.height, {
+          rows: Math.min(48, decoded.height), cols: Math.min(48, decoded.width),
+        });
+        if (cols.value === originalCols) cols.valueAsNumber = size.cols;
+        if (rows.value === originalRows) rows.valueAsNumber = size.rows;
+        useReference.disabled = false;
       }
     } catch {
       if (revision === current) showError('This image could not be read. Try a PNG, JPEG, or WebP file.');
@@ -157,6 +165,13 @@ export function makeImageImporter(onCreate: (pattern: Pattern) => void) {
     dialog.close();
     onCreate(pattern);
   });
+  useReference.addEventListener('click', () => {
+    const selected = file.files?.[0];
+    if (!selected || !bitmap) return;
+    const { width, height } = bitmap;
+    dialog.close();
+    onReference(selected, width, height);
+  });
 
   dialog.addEventListener('close', () => {
     ++revision;
@@ -173,6 +188,7 @@ export function makeImageImporter(onCreate: (pattern: Pattern) => void) {
       showError('');
       preview.hidden = true;
       create.disabled = true;
+      useReference.disabled = true;
       updatePalette();
       dialog.showModal();
     },

@@ -6,8 +6,9 @@ import {
 import { deriveTemplate, getTemplates, makeCollection, setColorChoices, type PatternTemplate } from './collection.js';
 import { byId } from './dom.js';
 import { makeGlobe } from './globe.js';
-import { makeGrid } from './grid.js';
+import { makeGrid, type GridReference } from './grid.js';
 import { makeImageImporter } from './image-import.js';
+import { fitImageToGrid } from './image-pattern.js';
 import { isSphereSize, sphereLayout, sphereSizes, stitchOperation } from './sphere.js';
 import { createStorage, type Mode } from './storage.js';
 
@@ -18,6 +19,13 @@ const palette = byId('palette');
 const cursorText = byId('grid-cursor');
 const fileInput = byId('file-input', 'input');
 const nameInput = byId('pattern-name', 'input');
+const resizeForm = byId('resize-form', 'form');
+const rowsInput = byId('rows', 'input');
+const colsInput = byId('cols', 'input');
+const referenceVisible = byId('reference-visible', 'input');
+const referenceMove = byId('reference-move', 'button');
+const referenceCenter = byId('reference-center', 'button');
+const referenceFit = byId('reference-fit', 'button');
 const nextStitch = byId('next-stitch', 'button');
 const editorGlobe = makeGlobe(byId('editor-globe', 'canvas'));
 const createGlobe = makeGlobe(byId('create-globe', 'canvas'));
@@ -32,6 +40,7 @@ const storage = createStorage(message => {
 });
 const grid = makeGrid({
   viewport, surface, shell: byId('grid-shell'), top: byId('ruler-top'), left: byId('ruler-left'),
+  referenceFrame: byId('grid-reference'), referenceImage: byId('grid-reference-image', 'img'),
   colors: byId('grid-colors', 'canvas'), done: byId('grid-done', 'canvas'), marker: byId('grid-marker'), guide: byId('guide-row'),
   lines: byId('grid-lines'), zoomOutput: byId('zoom-value'),
 });
@@ -40,7 +49,11 @@ const patterns = storage.patterns();
 const preferences = storage.preferences();
 const sessions = new Map<string, Progress>();
 const unsaved = new Set<string>();
-type Tool = 'paint' | 'erase' | 'pan';
+interface ReferenceLayer extends GridReference {
+  visible: boolean;
+}
+const references = new Map<string, ReferenceLayer>();
+type Tool = 'paint' | 'erase' | 'pan' | 'reference';
 interface PaintAction {
   before?: Pattern;
 }
@@ -55,6 +68,14 @@ interface Pan extends GridPosition {
   left: number;
   top: number;
 }
+interface ReferenceDrag extends GridPosition {
+  type: 'reference';
+  id: number;
+  layer: ReferenceLayer;
+  start: GridPosition;
+  scaleX: number;
+  scaleY: number;
+}
 let pattern: Pattern;
 let progress: Progress;
 let colorGuide: ReturnType<typeof makeColorGuide>;
@@ -63,7 +84,7 @@ let tool: Tool = 'paint';
 let color = 0;
 let editingColor: number | null = null;
 let cursor: GridPosition = { x: 0, y: 0 };
-let gesture: Stroke | Pan | null = null;
+let gesture: Stroke | Pan | ReferenceDrag | null = null;
 let clickOrigin: GridPosition | null = null;
 const undo: Pattern[] = [];
 const redo: Pattern[] = [];
@@ -82,6 +103,12 @@ const collection = makeCollection((template, action) => {
 const imageImporter = makeImageImporter(imported => {
   selectPattern(imported, 'edit', newProgress(imported));
   status('Imported “' + imported.name + '” as a flat pattern.');
+  surface.focus({ preventScroll: true });
+}, (file, width, height) => {
+  removeReference(pattern.id);
+  references.set(pattern.id, { url: URL.createObjectURL(file), width, height, x: 0, y: 0, visible: true });
+  setMode('edit');
+  status('Reference image added.');
   surface.focus({ preventScroll: true });
 });
 
@@ -153,6 +180,31 @@ function updateHistory() {
   byId('redo-action', 'button').disabled = !redo.length;
 }
 
+function removeReference(id: string) {
+  const layer = references.get(id);
+  if (!layer) return;
+  references.delete(id);
+  URL.revokeObjectURL(layer.url);
+}
+
+function refreshReference() {
+  const layer = references.get(pattern.id);
+  const visible = layer?.visible === true;
+  const canFit = layer && pattern.shape === 'flat';
+  byId('reference-tools').hidden = !layer;
+  referenceVisible.checked = visible;
+  referenceMove.disabled = referenceCenter.disabled = !visible;
+  referenceFit.hidden = byId('reference-fit-note').hidden = !canFit;
+  if ((!visible || mode !== 'edit') && tool === 'reference') setTool('paint');
+  grid.showReference(visible && mode === 'edit' ? layer : undefined);
+}
+
+function moveReference(layer: ReferenceLayer, x: number, y: number) {
+  layer.x = x;
+  layer.y = y;
+  if (layer.visible) grid.showReference(layer);
+}
+
 function refreshBoard() {
   const { rows, cols, cells } = pattern;
   const sphere = pattern.shape === 'sphere';
@@ -166,14 +218,14 @@ function refreshBoard() {
   byId('sphere-legend').hidden = !sphere;
   byId('editor-sphere-view').hidden = !sphere;
   nameInput.value = pattern.name;
-  const rowsInput = byId('rows', 'input');
   rowsInput.min = String(sphere ? sphereSizes.min : 1);
   rowsInput.max = String(sphere ? sphereSizes.max : limits.dimension);
   rowsInput.step = String(sphere ? sphereSizes.step : 1);
   rowsInput.valueAsNumber = rows;
-  byId('cols', 'input').disabled = sphere;
-  byId('cols', 'input').valueAsNumber = cols;
+  colsInput.disabled = sphere;
+  colsInput.valueAsNumber = cols;
   grid.drawPattern(pattern, progress.direction, mode === 'edit');
+  refreshReference();
   updateGlobe();
   renderPalette();
   updateHistory();
@@ -213,6 +265,7 @@ function setMode(nextMode: Mode) {
   byId('work-mode').setAttribute('aria-pressed', String(working));
   byId('collection-mode').setAttribute('aria-pressed', String(browsing));
   if (browsing) {
+    refreshReference();
     setText('mode-title', 'Pattern collection');
     setText('mode-summary', 'Choose a template to edit or crochet.');
     void collection.show();
@@ -221,12 +274,13 @@ function setMode(nextMode: Mode) {
   }
   byId('edit-tools').hidden = byId('edit-details').hidden = working;
   byId('follow-panel').hidden = !working;
+  byId('stitch-legend').hidden = !working;
   setText('mode-title', working ? 'Follow pattern' : 'Pattern editor');
   setText('mode-summary', working ? 'Click a stitch to jump, or click beside the chart to advance.' :
     'Design your next tapestry crochet project.');
-  setText('grid-shortcuts', working ? 'Space to start or advance · Left arrow to go back' :
-    'Arrow keys to move · Space to paint');
+  updateGridShortcuts();
   if (changedMode && pattern.shape === 'sphere') grid.drawPattern(pattern, progress.direction, !working);
+  refreshReference();
   if (working) {
     refreshTracking();
   } else {
@@ -236,12 +290,20 @@ function setMode(nextMode: Mode) {
   savePreferences();
 }
 
+function updateGridShortcuts() {
+  setText('grid-shortcuts', mode === 'work' ? 'Space to start or advance · Left arrow to go back' :
+    tool === 'reference' ? 'Drag to move the image · Arrow keys to nudge' : 'Arrow keys to move · Space to paint');
+}
+
 function setTool(nextTool: Tool) {
+  if (nextTool === 'reference' && !references.get(pattern.id)?.visible) return;
+  if (nextTool !== tool) finishGesture();
   tool = nextTool;
   workspace.dataset.tool = tool;
   for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-tool]')) {
     button.setAttribute('aria-pressed', String(button.dataset.tool === tool));
   }
+  updateGridShortcuts();
 }
 
 function remember(previous: Pattern) {
@@ -296,7 +358,7 @@ function stepHistory(from: Pattern[], to: Pattern[]) {
 function refreshCursor() {
   if (!pattern || mode !== 'edit') return;
   cursorText.classList.remove('is-color-change');
-  const focused = document.activeElement === surface;
+  const focused = document.activeElement === surface && tool !== 'reference';
   if (focused) {
     const { x, y } = cursor;
     const { stitches, start } = chartRow(pattern, y);
@@ -304,8 +366,7 @@ function refreshCursor() {
     const row = pattern.rows - y;
     if (pattern.shape === 'sphere') {
       const point = progress.direction === 'ltr' ? x + 1 : stitches - x;
-      cursorText.textContent = 'Round ' + row + ' · Stitch ' + point + ' of ' + stitches + ' · ' + name +
-        ' · ' + sphereOperation(row, point);
+      cursorText.textContent = 'Round ' + row + ' · Stitch ' + point + ' of ' + stitches + ' · ' + name;
     } else {
       cursorText.textContent = 'Row ' + row + ' · Column ' + (x + 1) + ' · ' + name;
     }
@@ -452,7 +513,7 @@ function finishGesture() {
 }
 
 viewport.addEventListener('pointerdown', event => {
-  if (event.button !== 0 || !event.isPrimary) return;
+  if (event.button !== 0 || !event.isPrimary || gesture) return;
   if (mode === 'work') {
     clickOrigin = { x: event.clientX, y: event.clientY };
     return;
@@ -463,6 +524,16 @@ viewport.addEventListener('pointerdown', event => {
       type: 'pan', id: event.pointerId, x: event.clientX, y: event.clientY,
       left: viewport.scrollLeft, top: viewport.scrollTop,
     };
+    workspace.classList.add('is-panning');
+  } else if (tool === 'reference') {
+    const layer = references.get(pattern.id);
+    if (event.target !== surface || !layer?.visible) return;
+    const { width, height } = surface.getBoundingClientRect();
+    gesture = {
+      type: 'reference', id: event.pointerId, x: event.clientX, y: event.clientY, layer,
+      start: { x: layer.x, y: layer.y }, scaleX: pattern.cols / width, scaleY: pattern.rows / height,
+    };
+    surface.focus({ preventScroll: true });
     workspace.classList.add('is-panning');
   } else {
     if (event.target !== surface) return;
@@ -484,6 +555,9 @@ viewport.addEventListener('pointermove', event => {
   if (active.type === 'pan') {
     viewport.scrollLeft = active.left + active.x - event.clientX;
     viewport.scrollTop = active.top + active.y - event.clientY;
+  } else if (active.type === 'reference') {
+    moveReference(active.layer, active.start.x + (event.clientX - active.x) * active.scaleX,
+      active.start.y + (event.clientY - active.y) * active.scaleY);
   } else {
     const tile = grid.positionAt(event);
     if (!tile) {
@@ -521,7 +595,7 @@ window.addEventListener('pagehide', finishGesture);
 surface.addEventListener('focus', refreshCursor);
 surface.addEventListener('blur', refreshCursor);
 const arrows = new Map([['ArrowLeft', [-1, 0]], ['ArrowRight', [1, 0]], ['ArrowUp', [0, -1]], ['ArrowDown', [0, 1]]]);
-const toolShortcuts = new Map<string, Tool>([['p', 'paint'], ['e', 'erase'], ['h', 'pan']]);
+const toolShortcuts = new Map<string, Tool>([['p', 'paint'], ['e', 'erase'], ['h', 'pan'], ['r', 'reference']]);
 
 document.addEventListener('keydown', event => {
   const target = event.target;
@@ -547,17 +621,25 @@ document.addEventListener('keydown', event => {
 
   if (event.ctrlKey || event.metaKey || event.altKey) return;
   const shortcut = toolShortcuts.get(event.key.toLowerCase());
-  if (shortcut && (target === surface || target.closest('#edit-tools'))) setTool(shortcut);
+  if (shortcut && (target === surface || target.closest('#edit-tools'))) {
+    setTool(shortcut);
+    refreshCursor();
+  }
   if (target !== surface) return;
   const arrow = arrows.get(event.key);
   if (arrow) {
     event.preventDefault();
+    if (tool === 'reference') {
+      const layer = references.get(pattern.id);
+      if (layer) moveReference(layer, layer.x + arrow[0], layer.y + arrow[1]);
+      return;
+    }
     cursor = grid.moveCursor(cursor, arrow[0], arrow[1]);
     refreshCursor();
     grid.reveal();
   } else if (event.key === ' ' || event.key === 'Enter') {
     event.preventDefault();
-    if (event.repeat || tool === 'pan') return;
+    if (event.repeat || tool === 'pan' || tool === 'reference') return;
     const action: PaintAction = {};
     paintAt(cursor.x, cursor.y, action);
     if (!action.before) return;
@@ -647,6 +729,7 @@ function renderLibrary() {
       patterns.delete(entry.id);
       sessions.delete(entry.id);
       unsaved.delete(entry.id);
+      removeReference(entry.id);
       if (entry.id === pattern.id) {
         const remaining = patterns.values().next().value;
         if (remaining) {
@@ -687,16 +770,51 @@ function exportPattern() {
   status('Pattern and progress exported as JSON.');
 }
 
-byId('resize-form', 'form').addEventListener('submit', event => {
+function resizeTo(rows: number, cols: number) {
+  if (rows === pattern.rows && cols === pattern.cols) return true;
+  if (!approveResize(rows, cols)) return false;
+  applyChange(resizePattern(pattern, rows, cols));
+  return true;
+}
+
+resizeForm.addEventListener('submit', event => {
   event.preventDefault();
-  const rows = byId('rows', 'input').valueAsNumber;
-  const cols = byId('cols', 'input').valueAsNumber;
-  if (rows === pattern.rows && cols === pattern.cols) return;
-  if (approveResize(rows, cols)) applyChange(resizePattern(pattern, rows, cols));
-  else {
-    byId('rows', 'input').valueAsNumber = pattern.rows;
-    byId('cols', 'input').valueAsNumber = pattern.cols;
+  const rows = rowsInput.valueAsNumber;
+  const cols = pattern.shape === 'sphere' ? rows * 2 : colsInput.valueAsNumber;
+  if (!resizeTo(rows, cols)) {
+    rowsInput.valueAsNumber = pattern.rows;
+    colsInput.valueAsNumber = pattern.cols;
   }
+});
+
+referenceFit.addEventListener('click', () => {
+  const layer = references.get(pattern.id);
+  if (!layer || pattern.shape !== 'flat' || !resizeForm.reportValidity()) return;
+  const { rows, cols } = fitImageToGrid(layer.width, layer.height, {
+    rows: rowsInput.valueAsNumber, cols: colsInput.valueAsNumber,
+  });
+  if (!resizeTo(rows, cols)) return;
+  rowsInput.valueAsNumber = rows;
+  colsInput.valueAsNumber = cols;
+  moveReference(layer, 0, 0);
+  status(`Grid fitted to the image at ${cols} × ${rows} stitches.`);
+});
+
+referenceVisible.addEventListener('change', () => {
+  const layer = references.get(pattern.id);
+  if (!layer) return;
+  layer.visible = referenceVisible.checked;
+  refreshReference();
+});
+referenceCenter.addEventListener('click', () => {
+  const layer = references.get(pattern.id);
+  if (layer) moveReference(layer, 0, 0);
+});
+byId('reference-remove').addEventListener('click', () => {
+  removeReference(pattern.id);
+  refreshReference();
+  status('Reference image removed.');
+  surface.focus({ preventScroll: true });
 });
 
 nameInput.addEventListener('change', () => {
@@ -904,8 +1022,11 @@ for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-c
 }
 for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-tool]')) {
   const tool = button.dataset.tool;
-  if (tool === 'paint' || tool === 'erase' || tool === 'pan') {
-    button.addEventListener('click', () => setTool(tool));
+  if (tool === 'paint' || tool === 'erase' || tool === 'pan' || tool === 'reference') {
+    button.addEventListener('click', () => {
+      setTool(tool);
+      if (tool === 'reference') surface.focus({ preventScroll: true });
+    });
   }
 }
 for (const id of ['import-open', 'library-import']) {

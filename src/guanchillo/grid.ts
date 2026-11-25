@@ -7,12 +7,20 @@ interface GridElements {
   top: HTMLElement;
   left: HTMLElement;
   surface: HTMLElement;
+  referenceFrame: HTMLElement;
+  referenceImage: HTMLImageElement;
   colors: HTMLCanvasElement;
   done: HTMLCanvasElement;
   marker: HTMLElement;
   guide: HTMLElement;
   lines: HTMLElement;
   zoomOutput: HTMLElement;
+}
+
+export interface GridReference extends GridPosition {
+  url: string;
+  width: number;
+  height: number;
 }
 
 const blank = '#fbf8ef';
@@ -25,7 +33,8 @@ function canvasContext(canvas: HTMLCanvasElement, options?: CanvasRenderingConte
 }
 
 export function makeGrid(elements: GridElements) {
-  const { viewport, shell, top, left, surface, colors, done, marker, guide, lines, zoomOutput } = elements;
+  const { viewport, shell, top, left, surface, referenceFrame, referenceImage, colors, done, marker, guide, lines,
+    zoomOutput } = elements;
   const ink = canvasContext(colors);
   const overlay = canvasContext(done);
   let pattern: Pattern;
@@ -122,11 +131,12 @@ export function makeGrid(elements: GridElements) {
       const { rounds, goreWidth } = sphereLayout(pattern.rows);
       for (const round of rounds) {
         const y = pattern.rows - round.number;
-        const specials = specialStitches(round, direction === 'ltr');
+        const specials = flipped ? null : specialStitches(round, direction === 'ltr');
         const width = round.kind === 'increase' ? 2 : 1;
         for (let gore = 0; gore < gores; gore++) {
           const x = projectedX(goreWidth, round, gore * round.perGore);
           addSpan('chart-strip', x, y, round.perGore);
+          if (!specials) continue;
           const stitch = specials[gore];
           if (stitch === undefined) {
             addSpan('chart-singles', x, y, round.perGore);
@@ -145,8 +155,40 @@ export function makeGrid(elements: GridElements) {
   function paintCell(x: number, y: number) {
     const color = pattern.palette[pattern.cells[chartRow(pattern, y).start + x]];
     const horizontal = pattern.shape === 'sphere' ? 2 : 1;
-    ink.fillStyle = color?.hex ?? blank;
-    ink.fillRect(displayX({ x, y }) * horizontal, orientY(y), horizontal, 1);
+    const left = displayX({ x, y }) * horizontal;
+    const top = orientY(y);
+    if (!color && !referenceFrame.hidden) {
+      ink.clearRect(left, top, horizontal, 1);
+    } else {
+      ink.fillStyle = color?.hex ?? blank;
+      ink.fillRect(left, top, horizontal, 1);
+    }
+  }
+
+  function drawColors() {
+    for (let y = 0; y < pattern.rows; y++) {
+      const { stitches } = chartRow(pattern, y);
+      for (let x = 0; x < stitches; x++) paintCell(x, y);
+    }
+  }
+
+  function showReference(reference?: GridReference) {
+    const wasHidden = referenceFrame.hidden;
+    referenceFrame.hidden = !reference;
+    if (reference) {
+      if (referenceImage.getAttribute('src') !== reference.url) referenceImage.src = reference.url;
+      const { rows, cols } = pattern;
+      const scale = Math.min(cols / reference.width, rows / reference.height);
+      const width = reference.width * scale;
+      const height = reference.height * scale;
+      referenceImage.style.width = `${100 * width / cols}%`;
+      referenceImage.style.height = `${100 * height / rows}%`;
+      referenceImage.style.left = `${100 * ((cols - width) / 2 + reference.x) / cols}%`;
+      referenceImage.style.top = `${100 * ((rows - height) / 2 + reference.y) / rows}%`;
+    } else {
+      referenceImage.removeAttribute('src');
+    }
+    if (wasHidden !== referenceFrame.hidden) drawColors();
   }
 
   function drawPattern(next: Pattern, nextDirection: Progress['direction'], design: boolean) {
@@ -166,10 +208,7 @@ export function makeGrid(elements: GridElements) {
     }
     if (changedGeometry || changedOrientation) layout();
     if (changedGeometry || changedDirection || changedOrientation) drawSphereLines();
-    for (let y = 0; y < pattern.rows; y++) {
-      const { stitches } = chartRow(pattern, y);
-      for (let x = 0; x < stitches; x++) paintCell(x, y);
-    }
+    drawColors();
   }
 
   function positionAt(event: MouseEvent): GridPosition | null {
@@ -262,7 +301,7 @@ export function makeGrid(elements: GridElements) {
   }).observe(viewport);
 
   return {
-    drawPattern, paintCell, positionAt, moveCursor, traceStroke, mark, reveal, setupProgress, updateStep,
+    drawPattern, paintCell, positionAt, moveCursor, traceStroke, mark, reveal, setupProgress, updateStep, showReference,
     hideProgress() { done.hidden = true; },
     zoom(amount: number) {
       scale = Math.max(0.5, Math.min(32, amount === 0 ? 1 : scale * amount));
