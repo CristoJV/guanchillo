@@ -5,8 +5,10 @@
 1. Select **New pattern**, give it a name and set the dimensions. You can also try the **Lava Diamond** example.
 2. Choose a color and use the **Pencil** to click or drag on the grid. The **Eraser** leaves stitches unassigned.
 3. Use **Undo** or **Redo** to revise your work. Each drag counts as one action.
-4. Choose **Apply size** to resize. The bottom-left corner stays in place. If you have started crocheting, Guanchillo asks before resetting your progress.
-5. Use **Add color** to extend the palette, or use the pencil next to a color to edit or remove it. The count shows how many stitches use each color.
+4. Choose **Apply size** to resize. A flat grid grows with empty squares along the top and right edges. If you have started crocheting, Guanchillo asks before resetting your progress.
+5. For a flat pattern, choose **Scale design** to multiply or divide the drawing and its grid by a whole-number factor. Use the chain to switch between one shared factor and separate horizontal and vertical factors. The size fields update when you apply the scale.
+6. Use **Add color** to extend the palette, or use the pencil next to a color to edit or remove it. When removing a color in use, choose **Fill with closest color** or **Leave unassigned** for its stitches.
+7. Use **Reduce colors** and choose the new count to preview the smaller palette. If the pattern has a matching color profile, Guanchillo uses that palette. Other counts merge similar yarn colors.
 
 Zoom in to work on details. Select **Pan** and drag to move around. **Fit to view** restores the overview.
 

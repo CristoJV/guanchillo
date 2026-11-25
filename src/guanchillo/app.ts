@@ -1,6 +1,7 @@
 import {
   chartRow, copyPattern, counts, examplePattern, hasStarted, jumpToStitch, limits, makeColorGuide,
-  newPattern, newProgress, newSphere, deserializePattern, resizePattern, serializePattern, tileAt, totalSteps,
+  newPattern, newProgress, newSphere, deserializePattern, resizePattern, scaleFlatPattern, scaledFlatSize,
+  serializePattern, tileAt, totalSteps,
   type GridPosition, type Pattern, type Progress,
 } from './model.js';
 import { deriveTemplate, getTemplates, makeCollection, setColorChoices, type PatternTemplate } from './collection.js';
@@ -8,7 +9,7 @@ import { byId } from './dom.js';
 import { makeGlobe } from './globe.js';
 import { makeGrid, type GridReference } from './grid.js';
 import { makeImageImporter } from './image-import.js';
-import { fitImageToGrid } from './image-pattern.js';
+import { fitImageToGrid, reducePatternPalette, removePatternColor, setPatternColor } from './image-pattern.js';
 import { isSphereSize, sphereLayout, sphereSizes, stitchOperation } from './sphere.js';
 import { createStorage, type Mode } from './storage.js';
 
@@ -159,6 +160,7 @@ function renderPalette() {
   });
   palette.replaceChildren(fragment);
   byId('color-add', 'button').disabled = pattern.palette.length >= limits.colors;
+  byId('reduce-colors', 'button').disabled = pattern.palette.length < 2;
   updateCounts();
 }
 
@@ -214,6 +216,7 @@ function refreshBoard() {
   setText('board-meta', dimensions + ' · ' + format(cells.length) + (cells.length === 1 ? ' stitch' : ' stitches'));
   setText('size-row-name', sphere ? 'Rounds' : 'Rows');
   byId('size-cols').hidden = sphere;
+  byId('scale-open').hidden = sphere;
   byId('sphere-size-note').hidden = !sphere;
   byId('sphere-legend').hidden = !sphere;
   byId('editor-sphere-view').hidden = !sphere;
@@ -332,7 +335,7 @@ function replacePattern(next: Pattern) {
 }
 
 // Resizing invalidates the saved stitch path, including when undoing a resize.
-function approveResize(rows: number, cols: number) {
+function approveResize(rows: number, cols: number, scaling = false) {
   if (rows === pattern.rows && cols === pattern.cols) return true;
   const defaultStart = newProgress(pattern);
   const changedStart = (['row', 'col', 'direction', 'alternate'] as const).some(key => progress[key] !== defaultStart[key]);
@@ -340,6 +343,7 @@ function approveResize(rows: number, cols: number) {
     return window.confirm('Resizing will reset your progress and starting point. Continue?');
   }
   if (rows < pattern.rows || cols < pattern.cols) {
+    if (scaling) return window.confirm('The drawing will be resampled to fit fewer stitches. Continue?');
     if (pattern.shape === 'sphere') return window.confirm('The colors will be resampled to fit fewer rounds. Continue?');
     return window.confirm('Stitches outside the new grid will be cropped. Continue?');
   }
@@ -659,7 +663,6 @@ function openColor(index: number | null = null) {
   byId('color-value', 'input').value = entry?.hex ?? '#739a8c';
   setText('color-dialog-title', entry ? 'Edit color' : 'Add color');
   byId('color-delete', 'button').hidden = !entry || pattern.palette.length === 1;
-  byId('color-remove-note').hidden = index === null || pattern.palette.length === 1 || !pattern.cells.includes(index);
   byId('color-dialog', 'dialog').showModal();
 }
 
@@ -677,25 +680,80 @@ byId('color-form').addEventListener('submit', event => {
     byId('color-name', 'input').reportValidity();
     return;
   }
-  const colors = pattern.palette.slice();
-  const index = editingColor ?? colors.length;
-  colors[index] = { name, hex: byId('color-value', 'input').value };
+  const index = editingColor ?? pattern.palette.length;
   color = index;
-  applyChange({ ...pattern, palette: colors, cells: pattern.cells.slice() });
+  applyChange(setPatternColor(pattern, index, { name, hex: byId('color-value', 'input').value }));
   setTool('paint');
   byId('color-dialog', 'dialog').close();
   returnToColor(index);
 });
 
-byId('color-delete', 'button').addEventListener('click', () => {
+const removeColorDialog = byId('remove-color-dialog', 'dialog');
+
+function deleteColor(fill: boolean) {
   if (editingColor === null || pattern.palette.length === 1) return;
   const removed = editingColor;
-  const colors = pattern.palette.filter((_, index) => index !== removed);
-  const cells = pattern.cells.map(value => value === removed ? -1 : value > removed ? value - 1 : value);
-  color = color > removed ? color - 1 : Math.min(color, colors.length - 1);
-  applyChange({ ...pattern, palette: colors, cells });
+  const remapped = removePatternColor(pattern, removed, fill);
+  color = color > removed ? color - 1 : Math.min(color, remapped.palette.length - 1);
+  applyChange({ ...pattern, ...remapped });
+  removeColorDialog.close();
   byId('color-dialog', 'dialog').close();
   returnToColor(color);
+}
+
+byId('color-delete', 'button').addEventListener('click', () => {
+  if (editingColor === null || pattern.palette.length === 1) return;
+  const stitches = counts(pattern).colors[editingColor];
+  if (stitches === 0) {
+    deleteColor(false);
+    return;
+  }
+  const name = pattern.palette[editingColor].name;
+  setText('remove-color-note', `What should happen to the ${format(stitches)} ${stitches === 1 ? 'stitch' : 'stitches'} using ${name}?`);
+  removeColorDialog.showModal();
+});
+byId('remove-color-fill').addEventListener('click', () => deleteColor(true));
+byId('remove-color-unassigned').addEventListener('click', () => deleteColor(false));
+
+const reduceColorDialog = byId('reduce-color-dialog', 'dialog');
+const reduceColorCount = byId('reduce-color-count', 'select');
+
+function colorReduction() {
+  return reducePatternPalette(pattern, Number(reduceColorCount.value), { keepUnused: true });
+}
+
+function updateReductionPreview() {
+  const swatches = colorReduction().palette.map(({ name, hex }) => {
+    const swatch = document.createElement('span');
+    swatch.className = 'swatch';
+    swatch.style.backgroundColor = hex;
+    swatch.setAttribute('role', 'listitem');
+    swatch.setAttribute('aria-label', name);
+    swatch.title = name;
+    return swatch;
+  });
+  byId('reduce-color-preview').replaceChildren(...swatches);
+}
+
+byId('reduce-colors').addEventListener('click', () => {
+  const options = Array.from({ length: pattern.palette.length - 1 }, (_, index) => {
+    const count = index + 1;
+    const profile = pattern.colorProfiles?.some(({ palette }) => palette.length === count);
+    return new Option(`${count} ${count === 1 ? 'color' : 'colors'}${profile ? ' (profile)' : ''}`, String(count));
+  });
+  reduceColorCount.replaceChildren(...options);
+  reduceColorCount.value = String(options.length);
+  updateReductionPreview();
+  reduceColorDialog.showModal();
+});
+reduceColorCount.addEventListener('change', updateReductionPreview);
+byId('reduce-color-form', 'form').addEventListener('submit', event => {
+  event.preventDefault();
+  const reduction = colorReduction();
+  applyChange({ ...pattern, ...reduction });
+  reduceColorDialog.close();
+  if (reduction.palette.length === 1) returnToColor(color);
+  status(`Palette reduced to ${reduction.palette.length} ${reduction.palette.length === 1 ? 'color' : 'colors'}.`);
 });
 
 function renderLibrary() {
@@ -785,6 +843,69 @@ resizeForm.addEventListener('submit', event => {
     rowsInput.valueAsNumber = pattern.rows;
     colsInput.valueAsNumber = pattern.cols;
   }
+});
+
+const scaleDialog = byId('scale-dialog', 'dialog');
+const scaleForm = byId('scale-form', 'form');
+const scaleLink = byId('scale-link', 'button');
+const scaleAll = byId('scale-all', 'select');
+const scaleX = byId('scale-x', 'select');
+const scaleY = byId('scale-y', 'select');
+let scaleLinked = true;
+
+function setScaleChoices(select: HTMLSelectElement, length: number) {
+  const options: HTMLOptionElement[] = [];
+  for (let divisor = length; divisor >= 2; divisor--) options.push(new Option(`÷${divisor}`, String(-divisor)));
+  for (let factor = 1; factor <= limits.dimension / length; factor++) options.push(new Option(`×${factor}`, String(factor)));
+  select.replaceChildren(...options);
+  select.value = '1';
+}
+
+function scaleFactors() {
+  return { x: Number((scaleLinked ? scaleAll : scaleX).value), y: Number((scaleLinked ? scaleAll : scaleY).value) };
+}
+
+function updateScaleForm() {
+  byId('scale-all-field').hidden = !scaleLinked;
+  byId('scale-axes').hidden = scaleLinked;
+  scaleLink.setAttribute('aria-pressed', String(scaleLinked));
+  scaleLink.querySelector('use')?.setAttribute('href', scaleLinked ? '#link' : '#unlink');
+  const { x, y } = scaleFactors();
+  const { cols, rows } = scaledFlatSize(pattern, x, y);
+  setText('scale-size', `${cols} columns × ${rows} rows`);
+  byId('scale-apply', 'button').disabled = rows === pattern.rows && cols === pattern.cols;
+}
+
+byId('scale-open').addEventListener('click', () => {
+  if (pattern.shape !== 'flat') return;
+  setScaleChoices(scaleAll, Math.max(pattern.rows, pattern.cols));
+  setScaleChoices(scaleX, pattern.cols);
+  setScaleChoices(scaleY, pattern.rows);
+  scaleLinked = true;
+  updateScaleForm();
+  scaleDialog.showModal();
+});
+scaleLink.addEventListener('click', () => {
+  if (scaleLinked) {
+    const factor = Number(scaleAll.value);
+    for (const [select, length] of [[scaleX, pattern.cols], [scaleY, pattern.rows]] as const) {
+      select.value = String(length === 1 && factor < 0 ? 1 : Math.max(-length, factor));
+    }
+  } else if (scaleX.value === scaleY.value) {
+    scaleAll.value = scaleX.value;
+  }
+  scaleLinked = !scaleLinked;
+  updateScaleForm();
+});
+scaleForm.addEventListener('change', updateScaleForm);
+scaleForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const { x, y } = scaleFactors();
+  const { rows, cols } = scaledFlatSize(pattern, x, y);
+  if ((rows === pattern.rows && cols === pattern.cols) || !approveResize(rows, cols, true)) return;
+  applyChange(scaleFlatPattern(pattern, x, y));
+  scaleDialog.close();
+  status(`Design scaled to ${cols} × ${rows} stitches.`);
 });
 
 referenceFit.addEventListener('click', () => {

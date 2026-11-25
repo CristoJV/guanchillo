@@ -1,4 +1,4 @@
-import { counts, limits, type Dimensions, type Pattern } from './model.js';
+import { counts, limits, type Color, type Dimensions, type Pattern } from './model.js';
 
 export function fitImageToGrid(width: number, height: number, bounds: Dimensions): Dimensions {
   const scale = Math.min(bounds.cols / width, bounds.rows / height);
@@ -109,13 +109,55 @@ function checkColorCount(count: number) {
   }
 }
 
-export function reducePatternPalette(pattern: Pattern, limit: number): Pick<Pattern, 'palette' | 'cells'> {
-  checkColorCount(limit);
+type PaletteChange = Pick<Pattern, 'palette' | 'cells' | 'colorProfiles'>;
+
+function remapPalette(pattern: Pattern, palette: Color[], mapping: number[], representatives: number[]): PaletteChange {
+  const profiles = pattern.colorProfiles?.filter(profile => profile.palette.length < palette.length).map(profile => {
+    const colors = profile.palette.map(color => parseHex(color.hex));
+    return {
+      palette: profile.palette,
+      mapping: representatives.map((source, index) => source < 0 ?
+        nearestColor(parseHex(palette[index].hex), colors) : profile.mapping[source]),
+    };
+  });
+  return {
+    palette, cells: pattern.cells.map(cell => mapping[cell] ?? -1),
+    ...(pattern.colorProfiles ? { colorProfiles: profiles?.length ? profiles : undefined } : {}),
+  };
+}
+
+export function applyColorProfile(pattern: Pattern, count: number): PaletteChange | undefined {
+  const profile = pattern.colorProfiles?.find(({ palette }) => palette.length === count);
+  if (!profile) return undefined;
+  // Keep each target's closest contributing yarn as the representative for further reductions.
+  const representatives = profile.palette.map(({ hex }, target) => {
+    const rgb = parseHex(hex);
+    let nearest = -1;
+    let distance = Infinity;
+    for (const [index, color] of pattern.palette.entries()) {
+      if (profile.mapping[index] !== target) continue;
+      const candidate = colorDistance(rgb, parseHex(color.hex));
+      if (candidate < distance) {
+        nearest = index;
+        distance = candidate;
+      }
+    }
+    return nearest;
+  });
+  return remapPalette(pattern, profile.palette, profile.mapping, representatives);
+}
+
+export function reducePatternPalette(pattern: Pattern, limit: number, { keepUnused = false } = {}): PaletteChange {
+  if (!Number.isInteger(limit) || limit < 1 || limit > Math.max(limits.colors, pattern.palette.length)) {
+    throw new Error('Choose a valid color count.');
+  }
+  const profile = applyColorProfile(pattern, limit);
+  if (profile) return profile;
   const frequency = counts(pattern).colors;
   const groups = pattern.palette.map(({ hex }, index) => ({
     index, rgb: parseHex(hex), weight: frequency[index], members: [index],
-  })).filter(group => group.weight > 0);
-  if (!groups.length) return { palette: [pattern.palette[0]], cells: pattern.cells };
+  })).filter(group => keepUnused || group.weight > 0);
+  if (!groups.length) return remapPalette(pattern, [pattern.palette[0]], [], [0]);
 
   while (groups.length > limit) {
     let best = Infinity;
@@ -124,7 +166,7 @@ export function reducePatternPalette(pattern: Pattern, limit: number): Pick<Patt
       for (let right = left + 1; right < groups.length; right++) {
         const a = groups[left];
         const b = groups[right];
-        const cost = colorDistance(a.rgb, b.rgb) * a.weight * b.weight / (a.weight + b.weight);
+        const cost = colorDistance(a.rgb, b.rgb) * a.weight * b.weight / Math.max(1, a.weight + b.weight);
         if (cost < best) {
           best = cost;
           merge = [left, right];
@@ -137,14 +179,29 @@ export function reducePatternPalette(pattern: Pattern, limit: number): Pick<Patt
     groups[keep].members.push(...groups[remove].members);
     groups.splice(remove, 1);
   }
-  const colorMap = new Map<number, number>();
+  const mapping: number[] = [];
   for (const [index, group] of groups.entries()) {
-    for (const member of group.members) colorMap.set(member, index);
+    for (const member of group.members) mapping[member] = index;
   }
-  return {
-    palette: groups.map(({ index }) => pattern.palette[index]),
-    cells: pattern.cells.map(cell => colorMap.get(cell) ?? -1),
-  };
+  return remapPalette(pattern, groups.map(({ index }) => pattern.palette[index]), mapping, groups.map(({ index }) => index));
+}
+
+export function setPatternColor(pattern: Pattern, index: number, color: Color): Pattern {
+  const palette = pattern.palette.slice();
+  palette[index] = color;
+  const colorProfiles = index === pattern.palette.length ? pattern.colorProfiles?.map(profile => ({
+    ...profile, mapping: [...profile.mapping, nearestColor(parseHex(color.hex), profile.palette.map(entry => parseHex(entry.hex)))],
+  })) : pattern.colorProfiles;
+  return { ...pattern, palette, colorProfiles, cells: pattern.cells.slice() };
+}
+
+export function removePatternColor(pattern: Pattern, removed: number, fill: boolean): PaletteChange {
+  if (!pattern.palette[removed] || pattern.palette.length === 1) throw new Error('Choose a removable color.');
+  const representatives = pattern.palette.map((_, index) => index).filter(index => index !== removed);
+  const palette = representatives.map(index => pattern.palette[index]);
+  const replacement = fill ? nearestColor(parseHex(pattern.palette[removed].hex), palette.map(color => parseHex(color.hex))) : -1;
+  const mapping = pattern.palette.map((_, index) => index === removed ? replacement : index > removed ? index - 1 : index);
+  return remapPalette(pattern, palette, mapping, representatives);
 }
 
 export function quantizeImage(pixels: Uint8ClampedArray, colors: number | string[]): Pick<Pattern, 'palette' | 'cells'> {

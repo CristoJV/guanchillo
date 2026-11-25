@@ -2,10 +2,10 @@ import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
 import { deriveTemplate, parseTemplate } from '../dist/collection.js';
-import { fitImageToGrid, quantizeImage, reducePatternPalette } from '../dist/image-pattern.js';
+import { fitImageToGrid, quantizeImage, reducePatternPalette, removePatternColor, setPatternColor } from '../dist/image-pattern.js';
 import {
-  chartRow, copyPattern, deserializePattern, hasStarted, jumpToStitch, makeColorGuide, newPattern, newProgress, newSphere,
-  parsePattern, resizePattern, serializePattern, tileAt, totalSteps,
+  chartRow, copyPattern, counts, deserializePattern, hasStarted, jumpToStitch, makeColorGuide, newPattern, newProgress, newSphere,
+  parsePattern, resizePattern, scaleFlatPattern, serializePattern, tileAt, totalSteps,
 } from '../dist/model.js';
 import { projectedStitch, projectedX, specialStitches, sphereLayout, stitchOperation } from '../dist/sphere.js';
 
@@ -42,6 +42,27 @@ test('the chart resolves each stitch through a centered gore and leaves gaps bet
       }
     }
   }
+});
+
+test('flat design scaling stretches and compresses the cells independently of canvas resizing', () => {
+  const pattern = { ...newPattern(2, 2), cells: [0, -1, 1, 2] };
+  const stretched = scaleFlatPattern(pattern, 2, 1);
+  assert.deepEqual([stretched.rows, stretched.cols], [2, 4]);
+  assert.deepEqual(stretched.cells, [0, 0, -1, -1, 1, 1, 2, 2]);
+  assert.deepEqual(scaleFlatPattern(stretched, -2, 2).cells, [0, -1, 0, -1, 1, 2, 1, 2]);
+  assert.deepEqual(resizePattern(pattern, 2, 4).cells, [0, -1, -1, -1, 1, 2, -1, -1]);
+  assert.throws(() => scaleFlatPattern(pattern, 1.5, 1), /whole-number/);
+  assert.throws(() => scaleFlatPattern(pattern, 129, 1), /256/);
+  assert.throws(() => scaleFlatPattern(newSphere(12), 2, 2), /flat grid/);
+});
+
+test('sphere reduction uses the coverage of several source rounds', () => {
+  const pattern = newSphere(18);
+  for (let y = 0; y < pattern.rows; y++) {
+    const { start, stitches } = chartRow(pattern, y);
+    pattern.cells.fill(y % 3 === 1 ? 1 : 0, start, start + stitches);
+  }
+  assert(resizePattern(pattern, 6, 12).cells.every(cell => cell === 0));
 });
 
 test('the spiral visits every actual stitch without alternating or visiting projection gaps', () => {
@@ -274,14 +295,48 @@ test('Earth derives color and resolution combinations from one unchanged master'
   const earth = parseTemplate('earth', file);
   const recommended = deriveTemplate(earth, earth.recommended, 4);
   const larger = deriveTemplate(earth, earth.pattern, 4);
-  const master = deriveTemplate(earth, earth.pattern, 8);
+  const master = deriveTemplate(earth, earth.pattern, 6);
   assert.deepEqual([recommended.rows, larger.rows, master.rows], [24, 63, 63]);
-  assert.deepEqual([recommended.palette.length, larger.palette.length, master.palette.length], [4, 4, 8]);
+  assert.deepEqual([recommended.palette.length, larger.palette.length, master.palette.length], [4, 4, 6]);
   assert.equal(new Set([recommended.id, larger.id, master.id]).size, 3);
   assert.deepEqual(master.cells, file.cells);
   assert.deepEqual(master.palette, file.palette);
   assert.deepEqual(earth.pattern.cells, file.cells);
   assert.throws(() => deriveTemplate(earth, { rows: 66, cols: 132 }, 4), /exceeds its master/);
+});
+
+test('every Earth size uses its exact three-to-six-color palette', () => {
+  const earth = parseTemplate('earth', readTemplate('earth'));
+  const basic = ['Ocean blue', 'Polar white', 'Land green'];
+  const names = [basic, [...basic, 'Light land green'], [...basic, 'Light land green', 'Desert sand'],
+    ['Ocean blue', 'Deep ocean blue', ...basic.slice(1), 'Light land green', 'Desert sand']];
+  for (let rows = 6; rows <= 63; rows += 3) {
+    for (const expected of names) {
+      const chart = deriveTemplate(earth, { rows, cols: rows * 2 }, expected.length);
+      assert.deepEqual(chart.palette.map(color => color.name), expected);
+      assert(counts(chart).colors.every(count => count > 0));
+    }
+  }
+
+  const five = { ...earth.pattern, ...reducePatternPalette(earth.pattern, 5) };
+  const three = reducePatternPalette(five, 3);
+  assert.deepEqual(three.cells, reducePatternPalette(earth.pattern, 3).cells);
+});
+
+test('profiles validate and round trip through palette edits, reduction, and JSON transfer', () => {
+  const earth = parseTemplate('earth', readTemplate('earth')).pattern;
+  const progress = { ...newProgress(earth), offset: 3 };
+  const restored = deserializePattern(serializePattern(earth, progress));
+  assert.deepEqual(restored.pattern.colorProfiles, earth.colorProfiles);
+  assert.deepEqual(restored.progress, progress);
+  const invalid = { ...earth, colorProfiles: [{ ...earth.colorProfiles[0], mapping: [0, 1, 2, 3, 4, 5] }] };
+  assert.throws(() => serializePattern(invalid), /Color profile mappings/);
+  assert.throws(() => deserializePattern(JSON.stringify(invalid)), /Color profile mappings/);
+
+  const added = setPatternColor(earth, 6, { name: 'Sea', hex: '#387eb4' });
+  assert.deepEqual(deserializePattern(serializePattern(added)).pattern.colorProfiles[0].mapping, [0, 0, 1, 2, 2, 2, 0]);
+  const removed = { ...earth, ...removePatternColor(earth, 1, true) };
+  assert.deepEqual(deserializePattern(serializePattern(removed)).pattern.colorProfiles.map(profile => profile.palette.length), [3, 4]);
 });
 
 test('resizing a template preserves the source and creates a separate pattern', () => {
@@ -303,6 +358,11 @@ test('the set uses smaller charts for the terrestrial planets and larger ones fo
   assert.equal(rounds[0], 12);
   assert.equal(rounds.at(-1), 42);
   assert(rounds.every((count, index) => index === 0 || count > rounds[index - 1]));
+  for (const key of approximateDiameterOrder) {
+    const { pattern } = parseTemplate(key, readTemplate(key));
+    assert(pattern.palette.length <= 6);
+    assert.deepEqual(pattern.colorProfiles.map(profile => profile.palette.length), [3, 4, 5]);
+  }
 });
 
 test('palette reduction keeps named source yarns and unassigned stitches', () => {
@@ -315,6 +375,8 @@ test('palette reduction keeps named source yarns and unassigned stitches', () =>
     palette: [pattern.palette[0], pattern.palette[2]],
     cells: [0, 0, 0, 1, -1],
   });
+  assert.deepEqual(removePatternColor(pattern, 0, true).cells, [0, 0, 0, 1, -1]);
+  assert.deepEqual(removePatternColor(pattern, 0, false).cells, [-1, -1, 0, 1, -1]);
 });
 
 test('existing files can still carry more than eight colors', () => {

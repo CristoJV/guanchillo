@@ -29,6 +29,8 @@
       <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></symbol>
       <symbol id="minus" viewBox="0 0 24 24"><path d="M5 12h14"></path></symbol>
       <symbol id="fit" viewBox="0 0 24 24"><path d="M4 9V4h5m6 0h5v5m0 6v5h-5m-6 0H4v-5"></path></symbol>
+      <symbol id="link" viewBox="0 0 24 24"><path d="M10 14l4-4m-2-3 2-2a4 4 0 0 1 6 6l-2 2m-6 4-2 2a4 4 0 0 1-6-6l2-2"></path></symbol>
+      <symbol id="unlink" viewBox="0 0 24 24"><path d="m14 5 1-1a4 4 0 0 1 5 6l-1 1M5 14l-1 1a4 4 0 0 0 6 5l1-1M4 4l16 16"></path></symbol>
       <symbol id="settings" viewBox="0 0 24 24"><path d="M4 7h16M4 17h16M8 4v6m8 4v6"></path></symbol>
       <symbol id="check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"></path></symbol>
       <symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></symbol>
@@ -89,6 +91,7 @@
             </div>
             <p class="form-note" id="sphere-size-note" hidden>Use a multiple of 3 from 6 to 126.</p>
             <button class="button outline full" type="submit">Apply size</button>
+            <button class="button outline full" id="scale-open" type="button">Scale design</button>
             <button class="button outline full" id="reference-fit" type="button" aria-describedby="reference-fit-note" hidden>Fit grid to image</button>
             <p class="form-note" id="reference-fit-note" hidden>Fit uses Rows and Columns as maximums.</p>
           </form>
@@ -163,6 +166,7 @@
           </div>
           <div id="palette" class="palette" aria-label="Pattern colors"></div>
           <div class="palette-footer"><span>Unassigned</span><span id="empty-count"></span></div>
+          <button class="button outline full" id="reduce-colors" type="button">Reduce colors</button>
         </section>
       </aside>
 
@@ -312,8 +316,41 @@
       <div class="dialog-heading"><h2 id="color-dialog-title">Add color</h2><button type="button" class="icon-button" data-close="color-dialog" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
       <label>Color name <input id="color-name" type="text" maxlength="80" required autofocus></label>
       <label class="color-field">Swatch <input id="color-value" type="color" value="#739a8c"></label>
-      <p id="color-remove-note" hidden>Removing this color leaves its stitches unassigned.</p>
       <div class="dialog-actions"><button class="button danger" id="color-delete" type="button" hidden>Remove color</button><button class="button primary" type="submit">Save color</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="remove-color-dialog" aria-labelledby="remove-color-title" aria-describedby="remove-color-note">
+    <div class="dialog-heading"><h2 id="remove-color-title">Remove color</h2><button type="button" class="icon-button" data-close="remove-color-dialog" aria-label="Cancel removal"><svg class="icon"><use href="#close"></use></svg></button></div>
+    <p id="remove-color-note"></p>
+    <div class="dialog-actions color-removal-actions">
+      <button class="button outline" id="remove-color-unassigned" type="button">Leave unassigned</button>
+      <button class="button primary" id="remove-color-fill" type="button">Fill with closest color</button>
+    </div>
+  </dialog>
+
+  <dialog id="reduce-color-dialog" aria-labelledby="reduce-color-title">
+    <form id="reduce-color-form">
+      <div class="dialog-heading"><h2 id="reduce-color-title">Reduce colors</h2><button type="button" class="icon-button" data-close="reduce-color-dialog" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
+      <label>Number of colors <select id="reduce-color-count" autofocus></select></label>
+      <div id="reduce-color-preview" class="reduce-color-preview" aria-label="Resulting palette" role="list"></div>
+      <div class="dialog-actions"><button class="button primary" type="submit">Apply reduction</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="scale-dialog" aria-labelledby="scale-title">
+    <form id="scale-form">
+      <div class="dialog-heading"><h2 id="scale-title">Scale design</h2><button type="button" class="icon-button" data-close="scale-dialog" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
+      <div class="scale-controls">
+        <label id="scale-all-field">Scale <select id="scale-all" autofocus></select></label>
+        <div class="field-grid" id="scale-axes" hidden>
+          <label>Horizontal (X) <select id="scale-x"></select></label>
+          <label>Vertical (Y) <select id="scale-y"></select></label>
+        </div>
+        <button class="button outline icon-button" id="scale-link" type="button" aria-label="Link scale axes" aria-pressed="true" title="Link scale axes"><svg class="icon"><use href="#link"></use></svg></button>
+      </div>
+      <output class="form-note" id="scale-size" aria-live="polite"></output>
+      <div class="dialog-actions"><button class="button primary" id="scale-apply" type="submit">Apply scale</button></div>
     </form>
   </dialog>
 

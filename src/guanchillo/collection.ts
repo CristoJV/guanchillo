@@ -1,7 +1,7 @@
 import { byId } from './dom.js';
 import { makeGlobe } from './globe.js';
-import { reducePatternPalette } from './image-pattern.js';
-import { limits, parsePattern, resamplePattern, type Dimensions, type Pattern } from './model.js';
+import { applyColorProfile, reducePatternPalette } from './image-pattern.js';
+import { counts, limits, parsePattern, resamplePattern, type Dimensions, type Pattern } from './model.js';
 import { drawFlatPreview } from './preview.js';
 import { isSphereSize } from './sphere.js';
 
@@ -32,10 +32,13 @@ export function deriveTemplate(template: Pick<PatternTemplate, 'pattern'>, size:
   if (size.rows > template.pattern.rows || size.cols > template.pattern.cols) {
     throw new Error('Template size exceeds its master chart.');
   }
-  const resized = resamplePattern(template.pattern, size.rows, size.cols);
+  const master = template.pattern;
+  const profile = applyColorProfile(master, colors);
+  const exactPalette = profile !== undefined || (Boolean(master.colorProfiles?.length) && colors === master.palette.length);
+  const resized = resamplePattern({ ...master, ...profile }, size.rows, size.cols);
   return {
-    ...resized, ...reducePatternPalette(resized, colors),
-    id: resized.id + '-' + resized.rows + 'x' + resized.cols + '-' + colors + '-colors',
+    ...resized, ...(exactPalette ? {} : reducePatternPalette(resized, colors)),
+    id: resized.id + '-' + resized.rows + 'x' + resized.cols + '-' + colors + '-colors' + (master.colorProfiles?.length ? '-profile' : ''),
   };
 }
 
@@ -43,7 +46,8 @@ export function setColorChoices(select: HTMLSelectElement, template?: PatternTem
   const max = template?.pattern.palette.length ?? 0;
   const options = Array.from({ length: max }, (_, index) => {
     const count = index + 1;
-    return new Option(count + (count === 1 ? ' color' : ' colors'), String(count));
+    const profile = template?.pattern.colorProfiles?.some(({ palette }) => palette.length === count);
+    return new Option(`${count} ${count === 1 ? 'color' : 'colors'}${profile ? ' (profile)' : ''}`, String(count));
   });
   select.replaceChildren(...options);
   if (max) select.value = String(Math.min(limits.defaultColors, max));
@@ -170,8 +174,8 @@ export function makeCollection(open: (entry: Pattern, action: Action) => void) {
       selected = deriveTemplate(template, size, budget);
       const shapeSummary = selected.shape === 'sphere' ? selected.rows + ' rounds · 3D' :
         selected.cols + ' × ' + selected.rows + ' stitches';
-      summary.textContent = shapeSummary + (selected.palette.length < budget ?
-        ' · ' + selected.palette.length + ' colors used' : '');
+      const used = counts(selected).colors.filter(count => count > 0).length;
+      summary.textContent = shapeSummary + (used < budget ? ' · ' + used + ' colors used' : '');
       if (selected.shape === 'sphere') {
         article.style.setProperty('--globe-size', Math.min(100, 35 + 65 * selected.rows / largestSphere) + '%');
       }

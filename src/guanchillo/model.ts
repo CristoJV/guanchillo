@@ -8,9 +8,14 @@ export interface Dimensions {
   cols: number;
 }
 
-interface Color {
+export interface Color {
   name: string;
   hex: string;
+}
+
+export interface ColorProfile {
+  palette: Color[];
+  mapping: number[];
 }
 
 interface PatternSource {
@@ -27,6 +32,7 @@ interface PatternData extends Dimensions {
   recommended?: Dimensions;
   name: string;
   palette: Color[];
+  colorProfiles?: ColorProfile[];
   cells: number[];
 }
 
@@ -172,6 +178,37 @@ function parseRecommended(value: unknown, rows: number, cols: number, shape: Pat
   return { rows: value.rows, cols: value.cols };
 }
 
+function parsePalette(palette: unknown, max: number): Color[] {
+  if (!Array.isArray(palette) || !palette.length || palette.length > max) throw new Error('Invalid color palette.');
+  return Array.from(palette, (entry: unknown) => {
+    const colorName = isRecord(entry) && typeof entry.name === 'string' ? entry.name.trim() : '';
+    if (!colorName || colorName.length > limits.name || !isRecord(entry) ||
+      typeof entry.hex !== 'string' || !/^#[a-f\d]{6}$/i.test(entry.hex)) {
+      throw new Error('Each color needs a name and a six-digit hex code.');
+    }
+    return { name: colorName, hex: entry.hex.toLowerCase() };
+  });
+}
+
+function parseColorProfiles(value: unknown, colorCount: number): ColorProfile[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value) || value.length >= colorCount) throw new Error('Invalid color profiles.');
+  const sizes = new Set<number>();
+  return Array.from(value, (profile: unknown) => {
+    if (!isRecord(profile) || !Array.isArray(profile.mapping) || profile.mapping.length !== colorCount) {
+      throw new Error('Each color profile needs one mapping per base color.');
+    }
+    const palette = parsePalette(profile.palette, colorCount - 1);
+    const mapping: unknown[] = [...profile.mapping];
+    if (!mapping.every(index => isIntegerInRange(index, 0, palette.length - 1))) {
+      throw new Error('Color profile mappings must refer to colors in their palette.');
+    }
+    if (sizes.has(palette.length)) throw new Error('Color profiles must have distinct palette sizes.');
+    sizes.add(palette.length);
+    return { palette, mapping };
+  });
+}
+
 export function parsePattern(value: unknown): PatternData & { id: string | null } {
   if (!isRecord(value) || value.version !== 1) {
     throw new Error('Expected a version 1 Guanchillo pattern.');
@@ -186,17 +223,9 @@ export function parsePattern(value: unknown): PatternData & { id: string | null 
   if (shape === 'sphere' && (!isSphereSize(rows) || cols !== sphereLayout(rows).goreWidth * gores)) {
     throw new Error('The sphere dimensions do not match its round count.');
   }
-  if (!name || name.length > limits.name || !Array.isArray(palette) || !palette.length || palette.length > legacyColorLimit) {
-    throw new Error('Check the pattern name and color palette.');
-  }
-  const colors = Array.from(palette, (entry: unknown) => {
-    const colorName = isRecord(entry) && typeof entry.name === 'string' ? entry.name.trim() : '';
-    if (!colorName || colorName.length > limits.name || !isRecord(entry) ||
-      typeof entry.hex !== 'string' || !/^#[a-f\d]{6}$/i.test(entry.hex)) {
-      throw new Error('Each color needs a name and a six-digit hex code.');
-    }
-    return { name: colorName, hex: entry.hex.toLowerCase() };
-  });
+  if (!name || name.length > limits.name) throw new Error('Check the pattern name.');
+  const colors = parsePalette(palette, legacyColorLimit);
+  const colorProfiles = parseColorProfiles(value.colorProfiles, colors.length);
   const stitchCount = shape === 'sphere' ? sphereLayout(rows).stitches : rows * cols;
   const cells: unknown[] = Array.isArray(value.cells) && value.cells.length === stitchCount ? [...value.cells] : [];
   if (cells.length !== stitchCount || !cells.every(index => isIntegerInRange(index, -1, colors.length - 1))) {
@@ -209,6 +238,7 @@ export function parsePattern(value: unknown): PatternData & { id: string | null 
   return {
     version, id, name, rows, cols, shape, tags, palette: colors, cells,
     ...(source ? { source } : {}), ...(recommended ? { recommended } : {}),
+    ...(colorProfiles?.length ? { colorProfiles } : {}),
   };
 }
 
@@ -218,20 +248,62 @@ function withChartSize(pattern: Pattern, rows: number, cols: number): Pattern {
   return { ...data, rows, cols, ...(fits ? { recommended } : {}) };
 }
 
+function sphereColorCoverage(pattern: Pattern, x: number, width: number, top: number, bottom: number) {
+  const coverage = new Float64Array(pattern.palette.length + 1);
+  for (let y = Math.floor(top); y < Math.ceil(bottom); y++) {
+    const source = chartRow(pattern, y);
+    const height = Math.min(bottom, y + 1) - Math.max(top, y);
+    const left = x * source.stitches / width;
+    const right = (x + 1) * source.stitches / width;
+    for (let col = Math.floor(left); col < Math.ceil(right); col++) {
+      const overlap = Math.min(right, col + 1) - Math.max(left, col);
+      coverage[pattern.cells[source.start + col] + 1] += height * overlap / source.stitches;
+    }
+  }
+  return coverage;
+}
+
 export function resamplePattern(pattern: Pattern, rows: number, cols: number): Pattern {
   const result: Pattern = {
     ...withChartSize(pattern, rows, pattern.shape === 'sphere' ? sphereLayout(rows).goreWidth * gores : cols),
     cells: [],
   };
+  const reduceSphere = pattern.shape === 'sphere' && rows < pattern.rows;
   for (let y = 0; y < rows; y++) {
+    const top = y * pattern.rows / rows;
+    const bottom = (y + 1) * pattern.rows / rows;
     const source = chartRow(pattern, Math.floor((y + 0.5) * pattern.rows / rows));
     const { stitches } = chartRow(result, y);
     for (let x = 0; x < stitches; x++) {
       const column = Math.floor((x + 0.5) * source.stitches / stitches);
-      result.cells.push(pattern.cells[source.start + column]);
+      let color = pattern.cells[source.start + column];
+      if (reduceSphere) {
+        const coverage = sphereColorCoverage(pattern, x, stitches, top, bottom);
+        for (let index = 0; index < coverage.length; index++) {
+          if (coverage[index] > coverage[color + 1] + 1e-10) color = index - 1;
+        }
+      }
+      result.cells.push(color);
     }
   }
   return result;
+}
+
+export function scaledFlatSize(pattern: Dimensions, x: number, y: number): Dimensions {
+  function scaled(length: number, factor: number) {
+    if (!Number.isInteger(factor) || factor === 0) throw new Error('Choose a whole-number scale factor.');
+    return factor > 0 ? length * factor : Math.max(1, Math.round(length / -factor));
+  }
+  const cols = scaled(pattern.cols, x);
+  const rows = scaled(pattern.rows, y);
+  if (rows > limits.dimension || cols > limits.dimension) throw new Error('The scaled grid exceeds 256 stitches per axis.');
+  return { rows, cols };
+}
+
+export function scaleFlatPattern(pattern: Pattern, x: number, y: number): Pattern {
+  if (pattern.shape !== 'flat') throw new Error('Design scaling requires a flat grid.');
+  const { rows, cols } = scaledFlatSize(pattern, x, y);
+  return resamplePattern(pattern, rows, cols);
 }
 
 export function copyPattern(pattern: Pattern, name: string): Pattern {

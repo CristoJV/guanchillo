@@ -73,6 +73,9 @@ label { display: grid; min-width: 0; gap: 0.35rem; font-size: 0.875rem; font-wei
 input:not([type="checkbox"]), select { width: 100%; min-width: 0; min-height: 2.45rem; padding: 0.42rem 0.54rem; border: 1px solid var(--strong-line); border-radius: 0.45rem; background: var(--card); font-size: 1rem; }
 select { appearance: none; padding-right: 2rem; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath fill='none' stroke='%233c5445' stroke-width='1.6' d='m5 7 5 5 5-5'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 0.5rem center; background-size: 1.1rem; }
 .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.55rem; }
+.scale-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 0.55rem; }
+#scale-link { min-height: 2.45rem; }
+#scale-link[aria-pressed="true"] { background: var(--soft-green); color: var(--dark-green); }
 .board-panel { overflow: hidden; }
 .board-header { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; min-height: 4.35rem; padding: 0.78rem 1rem 0.78rem 1.15rem; }
 .board-header > div:first-child { min-width: 0; }
@@ -123,6 +126,9 @@ select { appearance: none; padding-right: 2rem; background-image: url("data:imag
 .color-edit { width: 1.95rem; min-height: 2rem; color: var(--muted); }
 .color-edit .icon { width: 0.95rem; height: 0.95rem; }
 .palette-footer { display: flex; justify-content: space-between; gap: 0.25rem; margin-top: 0.62rem; padding: 0.68rem 0.25rem 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.84rem; }
+#reduce-colors { margin-top: 0.65rem; }
+.color-removal-actions, .reduce-color-preview { flex-wrap: wrap; }
+.reduce-color-preview { display: flex; gap: 0.35rem; }
 .page-footer { margin: 1.15rem 0 1.6rem; color: var(--muted); font-size: 0.81rem; }
 .progress-summary { display: flex; align-items: baseline; gap: 0.55rem; justify-content: space-between; color: var(--muted); font-size: 0.875rem; }
 .progress-summary strong { font: bold 2.3rem/1.05 var(--serif); color: var(--green); }
