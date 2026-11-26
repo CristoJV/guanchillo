@@ -10,7 +10,7 @@
 6. Use **Add color** to extend the palette, or use the pencil next to a color to edit or remove it. When removing a color in use, choose **Fill with closest color** or **Leave unassigned** for its stitches.
 7. Use **Reduce colors** and choose the new count to preview the smaller palette. If the pattern has a matching color profile, Guanchillo uses that palette. Other counts merge similar yarn colors.
 
-Zoom in to work on details. Select **Pan** and drag to move around. **Fit to view** restores the overview.
+Zoom in to work on details. Select **Pan** and drag to move around. **Fit to view** restores the overview. On a phone, **Grid and reference** contains sizing and tracing controls. **Pattern details** contains the name, export and the 3D preview for spheres.
 
 ## Import a flat pattern from an image
 
@@ -26,11 +26,11 @@ Zoom in to work on details. Select **Pan** and drag to move around. **Fit to vie
 3. Select **Move image** and drag on the grid, or press the arrow keys to move the image one square at a time. **Center image** restores the starting position. Switch to **Pencil** or **Eraser** to edit squares.
 4. Toggle **Show reference** to check the chart colors, or choose **Remove image** to clear the layer. Each reference stays with its pattern while the page is open.
 
-## Browse the pattern collection
+## Browse the pattern catalog
 
-Open **Collection** and use **Tag** and **Type** together to find charts. You can also select a tag on a card to apply it. Pick **Recommended** for the suggested size or **High** for the master size when both are available. Use **Colors** to choose how many yarns to use, up to the number available in the master. The preview updates before you choose **Edit** or **Crochet**. Returning with the same settings reopens the local copy, including its progress.
+Open **Catalog** and use **Tag** and **Type** together to find charts. You can also select a tag on a card to apply it. Pick **Recommended** for the suggested size or **High** for the master size when both are available. Use **Colors** to choose how many yarns to use, up to the number available in the master. The preview updates before you choose **Edit** or **Crochet**. Returning with the same settings reopens the local copy, including its progress.
 
-Choose **Islas** for the eight island outlines, or **Simbolos canarios** for the Ídolo de Tara, triangular pintadera, La Zarza spiral, dragon tree and timple. These charts are 32 × 32 stitches. Select **Source** on a card to see its reference.
+Choose **Canarias** for the island outlines and other Canarian designs. Choose **Minecraft** for the seven 8 × 8 charts. Select **Source** on a card to see its attribution when available. On a phone, cards appear one per row.
 
 To derive a smaller chart, choose a template in **New pattern**, then enter the stitch dimensions or number of rounds. Spheres top out at 63 rounds, the closest usable size to 64 under the multiple-of-three spiral rule. Changing the height of a flat template adjusts the width proportionally.
 
@@ -52,11 +52,17 @@ Changes save in this browser as you work. **Save** confirms the current copy, an
 
 ## Crochet
 
-1. Open a pattern and select **Crochet**. Use **Set starting point** to change where you begin. Row 1 is at the bottom and column 1 is on the left. Applying a new start resets your stitch count.
-2. Select **Start** to see the number of full stitches you can work in the current color. The stitch to close in the next color has its own **Change color** cue. Same-color counts continue across row or round boundaries when the yarn stays the same.
-3. After each stitch, use **Next stitch**, press **Space**, or click beside the chart. Use **Previous stitch** to go back. The outline shows the current stitch and completed stitches have a center mark.
-4. Click a stitch in the chart to jump directly to it. The stitches before it along your path are marked complete. If you click before the configured starting point, the selected stitch becomes the new start. The projection gaps between stitches have no click action.
-5. To resume, reopen the same pattern in the same browser and go to **Crochet**.
+1. Open a pattern and select **Crochet**. In **Settings**, choose the starting row or round, column and direction. Row 1 is at the bottom and column 1 is on the left. Applying a starting point resets the stitch count.
+2. Select **Start**. The instructions show how many full stitches to make in the current yarn and when to close a stitch with the next color. Same-color counts continue across rows and rounds.
+3. After each stitch, tap the work area, choose **Next**, or press **Space**. **Back** or the Left arrow returns one stitch. Navigation, settings and other controls use their own actions.
+4. On a phone, the strip shows up to eight stitches from the current row or round and moves with you. On desktop, you can click a stitch in the full chart to jump to it. The stitches before it along your path are marked complete. If you click before the configured starting point, the selected stitch becomes the new start.
+5. Reopen the pattern in the same browser to resume. To move progress to another browser, export the pattern as JSON and import it there.
+
+### Use a mouse or keyboard as a foot control
+
+In **Crochet → Settings → Hands-free controls**, choose **Assign** for next stitch or previous stitch. Press the key or click the mouse button you want to use. You can configure either action on its own or assign one input to each. Choose **Reset** to remove a custom assignment. Assignments are saved in the browser and apply across patterns. An assigned input takes priority over its default action.
+
+Click or tap a free part of the crochet screen to work without aiming for a button. The full desktop chart uses its own click-to-jump action. A held key counts as one press. Touch and the on-screen stitch buttons are also available.
 
 ## Keyboard shortcuts
 
@@ -66,4 +72,4 @@ Changes save in this browser as you work. **Save** confirms the current copy, an
 | Grid or tool panel in Design | P for Pencil, E for Eraser, H for Pan, R for Move image when the reference is visible |
 | Grid with Move image selected | Arrow keys to nudge the reference by one square |
 | Undo or redo | Ctrl or Cmd + Z to undo, Ctrl or Cmd + Shift + Z to redo. Ctrl or Cmd + Y also redoes |
-| Crochet mode | Space, Enter or Right arrow to start or advance, Left arrow to go back. Space and Enter activate the focused button if there is one |
+| Crochet mode | Space, Enter or Right arrow to start or advance, Left arrow to go back. Focused controls use their normal keyboard input |

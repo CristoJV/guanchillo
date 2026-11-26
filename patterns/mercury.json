@@ -35,10 +35,7 @@
       "hex": "#b9a6a1"
     }
   ],
-  "tags": [
-    "sistema-solar",
-    "planetas"
-  ],
+  "tags": ["sistema-solar"],
   "colorProfiles": [
     {
       "palette": [

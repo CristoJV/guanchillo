@@ -27,10 +27,7 @@
       "hex": "#f4e8d0"
     }
   ],
-  "tags": [
-    "navidad",
-    "bolas-navidenas"
-  ],
+  "tags": ["navidad"],
   "cells": [
     1, 1, 1, 1, 1, 1,
     2, 3, 2, 3, 2, 3, 2, 3, 2, 3, 2, 3,

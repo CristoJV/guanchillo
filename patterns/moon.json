@@ -35,10 +35,7 @@
       "hex": "#d9d7d3"
     }
   ],
-  "tags": [
-    "sistema-solar",
-    "luna"
-  ],
+  "tags": ["sistema-solar"],
   "colorProfiles": [
     {
       "palette": [

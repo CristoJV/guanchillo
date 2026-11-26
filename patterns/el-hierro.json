@@ -9,11 +9,7 @@
     "rows": 32,
     "cols": 32
   },
-  "tags": [
-    "canarias",
-    "islas",
-    "mapas"
-  ],
+  "tags": ["canarias"],
   "source": {
     "title": "Gobierno de Canarias · GRAFCAN",
     "url": "https://datos.canarias.es/catalogos/general/dataset/islas-y-municipios/resource/7303b4c0-aaff-4189-9718-402eac0fa273",

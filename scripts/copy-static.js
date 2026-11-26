@@ -3,7 +3,9 @@ import { copyFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 const source = new URL('../src/guanchillo/', import.meta.url);
 const output = new URL('../dist/', import.meta.url);
 
-for (const filename of ['index.html', 'styles.css', 'favicon.svg']) {
+for (const filename of ['index.html', 'styles.css', 'favicon.svg',
+  'views/crochet/desktop.css', 'views/crochet/mobile.css', 'views/editor/mobile.css']) {
+  mkdirSync(new URL('.', new URL(filename, output)), { recursive: true });
   copyFileSync(new URL(filename, source), new URL(filename, output));
 }
 

@@ -1,0 +1,72 @@
+@media (max-width: 650px) {
+  .workspace[data-mode="edit"] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "tools" "board" "palette" "grid-options" "pattern-options";
+    gap: 0.55rem;
+  }
+  .workspace[data-mode="edit"] :is(.tools-panel, .details-panel) { display: contents; }
+  .workspace[data-mode="edit"] .board-panel { grid-area: board; }
+  .workspace[data-mode="edit"] .viewport { height: clamp(13rem, 36svh, 23rem); }
+  .editor-toolbar {
+    grid-area: tools;
+    display: flex;
+    gap: 0.3rem;
+    align-items: center;
+    padding: 0.32rem;
+    border: 1px solid var(--line);
+    border-radius: 0.7rem;
+    background: var(--card);
+  }
+  .editor-toolbar h2 { display: none; }
+  .editor-toolbar .tool-list { display: flex; flex: 1; gap: 0.18rem; }
+  .editor-toolbar .tool-list button { display: inline-flex; flex: 1; min-width: 2.75rem; font-size: 0.75rem; }
+  .editor-toolbar .tool-list kbd { display: none; }
+  .editor-toolbar .history { gap: 0.2rem; margin: 0; }
+  .editor-toolbar .history button { width: 2.75rem; min-height: 2.75rem; }
+
+  .editor-palette, .workspace .editor-disclosure {
+    padding: 0.65rem;
+    border: 1px solid var(--line);
+    border-radius: 0.75rem;
+    background: var(--card);
+  }
+  .workspace .editor-disclosure { padding: 0; }
+  .tools-panel .editor-disclosure { grid-area: grid-options; }
+  .details-panel .editor-disclosure { grid-area: pattern-options; }
+  .workspace .editor-disclosure > summary {
+    display: list-item;
+    padding: 0.77rem 0.65rem;
+    min-height: 2.75rem;
+    color: var(--dark-green);
+    font-size: 0.9rem;
+    font-weight: 650;
+    cursor: pointer;
+  }
+  .workspace .editor-disclosure > section { padding: 0 0.65rem 0.65rem; }
+  .workspace .editor-disclosure > section + section { padding-top: 0.65rem; }
+
+  .editor-palette { grid-area: palette; }
+  .palette {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    max-height: 11.75rem;
+    overflow-y: auto;
+  }
+  .color-choice {
+    grid-template-columns: 1.25rem minmax(0, 1fr);
+    gap: 0.07rem 0.3rem;
+    min-height: 2.75rem;
+    font-size: 0.78rem;
+    padding-inline: 0.3rem;
+  }
+  .color-choice .swatch { grid-row: span 2; width: 1.25rem; height: 1.25rem; }
+  .color-count { grid-column: 2; line-height: 1; }
+  .palette-row .color-edit { min-width: 2rem; min-height: 2.75rem; }
+  .palette-footer { margin-top: 0.35rem; padding-top: 0.37rem; }
+  #reduce-colors { margin-top: 0.35rem; }
+  .board-header { min-height: 3.35rem; }
+  .board-footer { min-height: 0; padding-block: 0.4rem; }
+}
+
+@media (max-width: 370px) {
+  .editor-toolbar .tool-list button { flex-direction: column; gap: 0.15rem; }
+}

@@ -1,40 +1,23 @@
-import {
-  chartRow, copyPattern, counts, examplePattern, hasStarted, jumpToStitch, limits, makeColorGuide,
-  newPattern, newProgress, newSphere, deserializePattern, resizePattern, scaleFlatPattern, scaledFlatSize,
-  serializePattern, tileAt, totalSteps,
-  type GridPosition, type Pattern, type Progress,
-} from './model.js';
-import { deriveTemplate, getTemplates, makeCollection, setColorChoices, type PatternTemplate } from './collection.js';
-import { byId } from './dom.js';
-import { makeGlobe } from './globe.js';
-import { makeGrid, type GridReference } from './grid.js';
-import { makeImageImporter } from './image-import.js';
-import { fitImageToGrid, reducePatternPalette, removePatternColor, setPatternColor } from './image-pattern.js';
-import { isSphereSize, sphereLayout, sphereSizes, stitchOperation } from './sphere.js';
-import { createStorage, type Mode } from './storage.js';
+import { crochetStep } from './core/crochet.js';
+import { deserializePattern, examplePattern, hasStarted, jumpToStitch, limits, makeColorGuide, newPattern, newProgress,
+  serializePattern, totalSteps, type Pattern, type Progress } from './core/model.js';
+import { createStorage, type Mode } from './platform/storage.js';
+import { makeCatalog } from './views/catalog/catalog.js';
+import { makeDesktopCrochet } from './views/crochet/desktop.js';
+import { bindCrochetInput } from './views/crochet/input.js';
+import { makeMobileCrochet } from './views/crochet/mobile.js';
+import { bindCrochetSettings } from './views/crochet/settings.js';
+import { makeEditor } from './views/editor/editor.js';
+import { makeImageImporter } from './views/editor/image-import.js';
+import { bindNewPattern } from './views/editor/new-pattern.js';
+import { byId, setText, status } from './views/shared/dom.js';
+import { makeGrid } from './views/shared/grid.js';
+import { compactLayout } from './views/shared/layout.js';
 
 const viewport = byId('viewport');
 const surface = byId('grid-surface');
 const workspace = byId('workspace');
-const palette = byId('palette');
-const cursorText = byId('grid-cursor');
 const fileInput = byId('file-input', 'input');
-const nameInput = byId('pattern-name', 'input');
-const resizeForm = byId('resize-form', 'form');
-const rowsInput = byId('rows', 'input');
-const colsInput = byId('cols', 'input');
-const referenceVisible = byId('reference-visible', 'input');
-const referenceMove = byId('reference-move', 'button');
-const referenceCenter = byId('reference-center', 'button');
-const referenceFit = byId('reference-fit', 'button');
-const nextStitch = byId('next-stitch', 'button');
-const editorGlobe = makeGlobe(byId('editor-globe', 'canvas'));
-const createGlobe = makeGlobe(byId('create-globe', 'canvas'));
-const number = new Intl.NumberFormat('en');
-const percent = new Intl.NumberFormat('en', { style: 'percent' });
-const format = (value: number) => number.format(value);
-const status = (message: string) => { byId('app-status').textContent = message; };
-const setText = (id: string, value: string | number) => { byId(id).textContent = String(value); };
 const storage = createStorage(message => {
   setText('storage-warning', message);
   byId('storage-warning').hidden = false;
@@ -50,67 +33,76 @@ const patterns = storage.patterns();
 const preferences = storage.preferences();
 const sessions = new Map<string, Progress>();
 const unsaved = new Set<string>();
-interface ReferenceLayer extends GridReference {
-  visible: boolean;
-}
-const references = new Map<string, ReferenceLayer>();
-type Tool = 'paint' | 'erase' | 'pan' | 'reference';
-interface PaintAction {
-  before?: Pattern;
-}
-interface Stroke extends PaintAction {
-  type: 'stroke';
-  id: number;
-  last: GridPosition | null;
-}
-interface Pan extends GridPosition {
-  type: 'pan';
-  id: number;
-  left: number;
-  top: number;
-}
-interface ReferenceDrag extends GridPosition {
-  type: 'reference';
-  id: number;
-  layer: ReferenceLayer;
-  start: GridPosition;
-  scaleX: number;
-  scaleY: number;
-}
+const compact = compactLayout();
+let controls = storage.crochetControls();
 let pattern: Pattern;
 let progress: Progress;
 let colorGuide: ReturnType<typeof makeColorGuide>;
 let mode: Mode = preferences?.mode ?? 'edit';
-let tool: Tool = 'paint';
-let color = 0;
-let editingColor: number | null = null;
-let cursor: GridPosition = { x: 0, y: 0 };
-let gesture: Stroke | Pan | ReferenceDrag | null = null;
-let clickOrigin: GridPosition | null = null;
-const undo: Pattern[] = [];
-const redo: Pattern[] = [];
-const collection = makeCollection((template, action) => {
+
+const editor = makeEditor({ viewport, surface, workspace, grid, savePattern, replacePattern });
+const desktop = makeDesktopCrochet(grid, surface, move);
+const mobile = makeMobileCrochet(move);
+bindCrochetInput({
+  isActive: () => mode === 'work', controls: () => controls, move, surface,
+  jump(event) {
+    const tile = grid.positionAt(event);
+    if (!tile) return;
+    const previous = progress;
+    const next = jumpToStitch(pattern, previous, tile);
+    if (next === previous) return;
+    updateProgress(next);
+    if (next.row !== previous.row || next.col !== previous.col) refreshTracking();
+    else prepareCrochetView();
+  },
+});
+bindCrochetSettings({
+  getPattern: () => pattern, getProgress: () => progress,
+  applyStart(next) {
+    updateProgress(next);
+    grid.drawPattern(pattern, progress.direction, false);
+    refreshTracking();
+  },
+  getControls: () => controls,
+  saveControls(next) {
+    controls = next;
+    storage.saveCrochetControls(controls);
+  },
+  focus: focusCrochet,
+});
+bindNewPattern(fresh => selectPattern(fresh, 'edit', newProgress(fresh)));
+
+const catalog = makeCatalog((template, action) => {
   const existing = patterns.get(template.id);
-  if (existing?.id === pattern.id) {
-    setMode(action);
-  } else if (existing) {
-    selectPattern(existing, action);
-  } else {
+  if (existing?.id === pattern.id) setMode(action);
+  else if (existing) selectPattern(existing, action);
+  else {
     const copy = structuredClone(template);
     selectPattern(copy, action, newProgress(copy));
   }
-  surface.focus({ preventScroll: true });
+  if (action === 'work') focusCrochet();
+  else surface.focus({ preventScroll: true });
 });
 const imageImporter = makeImageImporter(imported => {
   selectPattern(imported, 'edit', newProgress(imported));
   status('Imported “' + imported.name + '” as a flat pattern.');
   surface.focus({ preventScroll: true });
 }, (file, width, height) => {
-  removeReference(pattern.id);
-  references.set(pattern.id, { url: URL.createObjectURL(file), width, height, x: 0, y: 0, visible: true });
+  editor.addReference(file, width, height);
   setMode('edit');
   status('Reference image added.');
   surface.focus({ preventScroll: true });
+});
+
+function focusCrochet() {
+  if (compact.matches) mobile.focus();
+  else desktop.focus();
+}
+
+compact.addEventListener('change', () => {
+  if (mode !== 'work') return;
+  prepareCrochetView();
+  if (document.activeElement === document.body && !document.querySelector('dialog[open]')) focusCrochet();
 });
 
 function savePreferences() {
@@ -127,197 +119,17 @@ function savePattern() {
   return storage.saveProgress(pattern.id, progress);
 }
 
-function renderPalette() {
-  const fragment = document.createDocumentFragment();
-  pattern.palette.forEach((entry, index) => {
-    const row = document.createElement('div');
-    row.className = 'palette-row';
-    const select = document.createElement('button');
-    select.type = 'button';
-    select.className = 'color-choice';
-    const swatch = document.createElement('span');
-    swatch.className = 'swatch';
-    swatch.style.backgroundColor = entry.hex;
-    const name = document.createElement('strong');
-    name.textContent = entry.name;
-    const count = document.createElement('span');
-    count.className = 'color-count';
-    select.append(swatch, name, count);
-    select.addEventListener('click', () => {
-      color = index;
-      setTool('paint');
-      updateCounts();
-    });
-    const edit = document.createElement('button');
-    edit.type = 'button';
-    edit.className = 'icon-button color-edit';
-    edit.setAttribute('aria-label', 'Edit color ' + entry.name);
-    edit.title = 'Edit color';
-    edit.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#pencil"></use></svg>';
-    edit.addEventListener('click', () => openColor(index));
-    row.append(select, edit);
-    fragment.append(row);
-  });
-  palette.replaceChildren(fragment);
-  byId('color-add', 'button').disabled = pattern.palette.length >= limits.colors;
-  byId('reduce-colors', 'button').disabled = pattern.palette.length < 2;
-  updateCounts();
-}
-
-function updateCounts() {
-  const stats = counts(pattern);
-  for (const [index, row] of Array.from(palette.children).entries()) {
-    const count = stats.colors[index];
-    const selected = index === color;
-    row.classList.toggle('selected', selected);
-    const choice = row.firstElementChild;
-    choice?.setAttribute('aria-pressed', String(selected));
-    if (choice?.lastElementChild) choice.lastElementChild.textContent = format(count);
-  }
-  setText('empty-count', format(stats.empty));
-}
-
-function updateHistory() {
-  byId('undo-action', 'button').disabled = !undo.length;
-  byId('redo-action', 'button').disabled = !redo.length;
-}
-
-function removeReference(id: string) {
-  const layer = references.get(id);
-  if (!layer) return;
-  references.delete(id);
-  URL.revokeObjectURL(layer.url);
-}
-
-function refreshReference() {
-  const layer = references.get(pattern.id);
-  const visible = layer?.visible === true;
-  const canFit = layer && pattern.shape === 'flat';
-  byId('reference-tools').hidden = !layer;
-  referenceVisible.checked = visible;
-  referenceMove.disabled = referenceCenter.disabled = !visible;
-  referenceFit.hidden = byId('reference-fit-note').hidden = !canFit;
-  if ((!visible || mode !== 'edit') && tool === 'reference') setTool('paint');
-  grid.showReference(visible && mode === 'edit' ? layer : undefined);
-}
-
-function moveReference(layer: ReferenceLayer, x: number, y: number) {
-  layer.x = x;
-  layer.y = y;
-  if (layer.visible) grid.showReference(layer);
-}
-
-function refreshBoard() {
-  const { rows, cols, cells } = pattern;
-  const sphere = pattern.shape === 'sphere';
-  setText('board-title', pattern.name);
-  const dimensions = sphere ? format(rows) + ' rounds · ' + format(cols) + ' stitches at widest' :
-    format(rows) + (rows === 1 ? ' row' : ' rows') + ' × ' + format(cols) + (cols === 1 ? ' column' : ' columns');
-  setText('board-meta', dimensions + ' · ' + format(cells.length) + (cells.length === 1 ? ' stitch' : ' stitches'));
-  setText('size-row-name', sphere ? 'Rounds' : 'Rows');
-  byId('size-cols').hidden = sphere;
-  byId('scale-open').hidden = sphere;
-  byId('sphere-size-note').hidden = !sphere;
-  byId('sphere-legend').hidden = !sphere;
-  byId('editor-sphere-view').hidden = !sphere;
-  nameInput.value = pattern.name;
-  rowsInput.min = String(sphere ? sphereSizes.min : 1);
-  rowsInput.max = String(sphere ? sphereSizes.max : limits.dimension);
-  rowsInput.step = String(sphere ? sphereSizes.step : 1);
-  rowsInput.valueAsNumber = rows;
-  colsInput.disabled = sphere;
-  colsInput.valueAsNumber = cols;
-  grid.drawPattern(pattern, progress.direction, mode === 'edit');
-  refreshReference();
-  updateGlobe();
-  renderPalette();
-  updateHistory();
-  refreshCursor();
-}
-
 function selectPattern(selected: Pattern, nextMode: Mode = 'edit', initialProgress?: Progress) {
-  finishGesture();
+  editor.finishGesture();
   pattern = selected;
   progress = initialProgress ?? sessions.get(pattern.id) ?? storage.progress(pattern);
   sessions.set(pattern.id, progress);
-  const y = pattern.rows - 1;
-  cursor = { x: pattern.shape === 'sphere' ? chartRow(pattern, y).stitches - 1 : 0, y };
-  color = Math.min(1, pattern.palette.length - 1);
-  undo.length = redo.length = 0;
-  setTool('paint');
   if (initialProgress) savePattern();
-  refreshBoard();
+  editor.show(pattern, progress, nextMode === 'edit', true);
   setMode(nextMode);
   grid.zoom(0);
   viewport.scrollTop = viewport.scrollLeft = 0;
   if (mode === 'work') grid.reveal();
-}
-
-function setMode(nextMode: Mode) {
-  finishGesture();
-  const changedMode = mode !== nextMode;
-  mode = nextMode;
-  workspace.dataset.mode = mode;
-  const working = mode === 'work';
-  const browsing = mode === 'collection';
-  workspace.hidden = browsing;
-  byId('collection-view').hidden = !browsing;
-  byId('workbench-actions').hidden = browsing;
-  byId('workbench-footer').hidden = browsing;
-  byId('edit-mode').setAttribute('aria-pressed', String(mode === 'edit'));
-  byId('work-mode').setAttribute('aria-pressed', String(working));
-  byId('collection-mode').setAttribute('aria-pressed', String(browsing));
-  if (browsing) {
-    refreshReference();
-    setText('mode-title', 'Pattern collection');
-    setText('mode-summary', 'Choose a template to edit or crochet.');
-    void collection.show();
-    savePreferences();
-    return;
-  }
-  byId('edit-tools').hidden = byId('edit-details').hidden = working;
-  byId('follow-panel').hidden = !working;
-  byId('stitch-legend').hidden = !working;
-  setText('mode-title', working ? 'Follow pattern' : 'Pattern editor');
-  setText('mode-summary', working ? 'Click a stitch to jump, or click beside the chart to advance.' :
-    'Design your next tapestry crochet project.');
-  updateGridShortcuts();
-  if (changedMode && pattern.shape === 'sphere') grid.drawPattern(pattern, progress.direction, !working);
-  refreshReference();
-  if (working) {
-    refreshTracking();
-  } else {
-    grid.hideProgress();
-    refreshCursor();
-  }
-  savePreferences();
-}
-
-function updateGridShortcuts() {
-  setText('grid-shortcuts', mode === 'work' ? 'Space to start or advance · Left arrow to go back' :
-    tool === 'reference' ? 'Drag to move the image · Arrow keys to nudge' : 'Arrow keys to move · Space to paint');
-}
-
-function setTool(nextTool: Tool) {
-  if (nextTool === 'reference' && !references.get(pattern.id)?.visible) return;
-  if (nextTool !== tool) finishGesture();
-  tool = nextTool;
-  workspace.dataset.tool = tool;
-  for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-tool]')) {
-    button.setAttribute('aria-pressed', String(button.dataset.tool === tool));
-  }
-  updateGridShortcuts();
-}
-
-function remember(previous: Pattern) {
-  undo.push(previous);
-  if (undo.length > 40) undo.shift();
-  redo.length = 0;
-}
-
-function applyChange(next: Pattern) {
-  remember(pattern);
-  replacePattern(next);
 }
 
 function replacePattern(next: Pattern) {
@@ -326,435 +138,86 @@ function replacePattern(next: Pattern) {
   if (resized) {
     progress = newProgress(pattern);
     sessions.set(pattern.id, progress);
-    const y = Math.min(cursor.y, pattern.rows - 1);
-    cursor = { x: Math.min(cursor.x, chartRow(pattern, y).stitches - 1), y };
   }
-  color = Math.min(color, pattern.palette.length - 1);
   savePattern();
-  refreshBoard();
+  editor.show(pattern, progress, true);
 }
 
-// Resizing invalidates the saved stitch path, including when undoing a resize.
-function approveResize(rows: number, cols: number, scaling = false) {
-  if (rows === pattern.rows && cols === pattern.cols) return true;
-  const defaultStart = newProgress(pattern);
-  const changedStart = (['row', 'col', 'direction', 'alternate'] as const).some(key => progress[key] !== defaultStart[key]);
-  if (hasStarted(progress) || changedStart) {
-    return window.confirm('Resizing will reset your progress and starting point. Continue?');
+function setMode(nextMode: Mode) {
+  editor.finishGesture();
+  const changed = mode !== nextMode;
+  mode = nextMode;
+  document.body.dataset.mode = workspace.dataset.mode = mode;
+  const working = mode === 'work';
+  const browsing = mode === 'catalog';
+  workspace.hidden = browsing;
+  byId('catalog-view').hidden = !browsing;
+  byId('workbench-actions').hidden = browsing;
+  byId('workbench-footer').hidden = browsing;
+  byId('edit-mode').setAttribute('aria-pressed', String(mode === 'edit'));
+  byId('work-mode').setAttribute('aria-pressed', String(working));
+  byId('catalog-mode').setAttribute('aria-pressed', String(browsing));
+  byId('mobile-settings').hidden = !working;
+  byId('mobile-crochet').hidden = !working;
+  byId('edit-tools').hidden = byId('edit-details').hidden = mode !== 'edit';
+  byId('follow-panel').hidden = !working;
+  byId('stitch-legend').hidden = !working;
+
+  if (changed && pattern.shape === 'sphere') grid.drawPattern(pattern, progress.direction, mode === 'edit');
+  if (!working) grid.hideProgress();
+  editor.setActive(mode === 'edit', progress);
+
+  setText('mode-title', browsing ? 'Pattern catalog' : working ? 'Follow pattern' : 'Pattern editor');
+  setText('mode-summary', browsing ? 'Choose a template to edit or crochet.' : working ?
+    'Click a stitch to jump, or click beside the chart to advance.' : 'Design your next tapestry crochet project.');
+  if (browsing) void catalog.show();
+  if (working) {
+    setText('grid-shortcuts', 'Space to start or advance · Left arrow to go back');
+    refreshTracking();
   }
-  if (rows < pattern.rows || cols < pattern.cols) {
-    if (scaling) return window.confirm('The drawing will be resampled to fit fewer stitches. Continue?');
-    if (pattern.shape === 'sphere') return window.confirm('The colors will be resampled to fit fewer rounds. Continue?');
-    return window.confirm('Stitches outside the new grid will be cropped. Continue?');
-  }
-  return true;
-}
-
-function stepHistory(from: Pattern[], to: Pattern[]) {
-  finishGesture();
-  const previous = from.at(-1);
-  if (!previous || !approveResize(previous.rows, previous.cols)) return;
-  to.push(pattern);
-  from.pop();
-  replacePattern(previous);
-}
-
-function refreshCursor() {
-  if (!pattern || mode !== 'edit') return;
-  cursorText.classList.remove('is-color-change');
-  const focused = document.activeElement === surface && tool !== 'reference';
-  if (focused) {
-    const { x, y } = cursor;
-    const { stitches, start } = chartRow(pattern, y);
-    const name = pattern.palette[pattern.cells[start + x]]?.name ?? 'Unassigned';
-    const row = pattern.rows - y;
-    if (pattern.shape === 'sphere') {
-      const point = progress.direction === 'ltr' ? x + 1 : stitches - x;
-      cursorText.textContent = 'Round ' + row + ' · Stitch ' + point + ' of ' + stitches + ' · ' + name;
-    } else {
-      cursorText.textContent = 'Row ' + row + ' · Column ' + (x + 1) + ' · ' + name;
-    }
-    grid.mark(cursor);
-  } else {
-    cursorText.textContent = '';
-    grid.mark(null);
-  }
-}
-
-function updateGlobe() {
-  if (pattern.shape === 'sphere') editorGlobe.show(pattern);
-}
-
-function sphereOperation(row: number, point: number): string {
-  const operations = {
-    'magic-ring': 'Single crochet into the magic ring',
-    'increase-first': 'Increase · first stitch into the same stitch',
-    'increase-second': 'Increase · second stitch into the same stitch',
-    decrease: 'Decrease · join the next two stitches',
-    single: 'Single crochet',
-  };
-  const round = sphereLayout(pattern.rows).rounds[row - 1];
-  return operations[stitchOperation(round, point)];
+  savePreferences();
 }
 
 function refreshTracking() {
   colorGuide = makeColorGuide(pattern, progress);
-  grid.setupProgress(progress);
+  prepareCrochetView();
+}
+
+function prepareCrochetView() {
+  if (!compact.matches) desktop.setup(progress);
   renderProgress();
 }
 
 function renderProgress() {
-  const total = totalSteps(pattern, progress);
-  const ratio = progress.offset / total;
-  const current = tileAt(pattern, progress, progress.offset);
-  const entry = current ? pattern.palette[pattern.cells[current.index]] : null;
-  const started = hasStarted(progress);
-  const cue = started && current ? colorGuide(progress.offset) : null;
-  const changingColor = cue?.fullStitches === 0 && cue.nextColor !== undefined;
-  const guidance = byId('current-run');
-  let instruction = '';
-  if (changingColor) {
-    const nextColor = pattern.palette[cue.nextColor]?.name ?? 'Unassigned';
-    instruction = 'Change color to ' + nextColor + ' when closing this stitch.';
-  } else if (cue) {
-    const count = format(cue.fullStitches);
-    const stitches = cue.fullStitches === 1 ? 'stitch' : 'stitches';
-    instruction = cue.nextColor === undefined ? `${count} ${stitches} remaining in this color.` :
-      `${count} full ${stitches} before the color change.`;
-  }
-  guidance.textContent = instruction;
-  guidance.hidden = !cue;
-  guidance.classList.toggle('is-color-change', changingColor);
-  cursorText.classList.toggle('is-color-change', changingColor);
-  setText('percent', percent.format(Math.floor(progress.offset * 100 / total) / 100));
-  setText('done-count', format(progress.offset) + ' of ' + format(total) + (total === 1 ? ' stitch' : ' stitches'));
-  byId('progress-bar', 'progress').value = ratio * 100;
-  setText('current-heading', current ? 'Current stitch' : 'Pattern complete');
-  const sphere = pattern.shape === 'sphere';
-  setText('current-row-name', sphere ? 'Round' : 'Row');
-  setText('current-row', current?.row ?? '—');
-  setText('current-point', current?.point ?? '—');
-  setText('current-color', current ? entry?.name ?? 'Unassigned' : 'All stitches complete');
-  setText('current-direction', current ? current.leftToRight ? 'Left to right' : 'Right to left' : '');
-  const operation = byId('current-operation');
-  operation.hidden = !sphere || !current;
-  operation.textContent = sphere && current ? sphereOperation(current.row, current.point) : '';
-  const roundNote = byId('round-note');
-  roundNote.hidden = !sphere || Boolean(current && current.row !== pattern.rows);
-  roundNote.textContent = roundNote.hidden ? '' : current ?
-    'Stuff the sphere before finishing this round.' : 'Fasten off and close the opening.';
-  const swatch = byId('current-swatch');
-  swatch.hidden = !current;
-  swatch.style.backgroundColor = entry?.hex ?? '#fbf8ef';
-  nextStitch.textContent = started ? 'Next stitch' : 'Start';
-  nextStitch.disabled = !current;
-  byId('previous-stitch', 'button').disabled = progress.offset === 0;
-  cursorText.textContent = current ?
-    (sphere ? 'Round ' : 'Row ') + current.row + ' · Stitch ' + current.point + ' · ' +
-      (entry?.name ?? 'Unassigned') + (instruction ? ' · ' + instruction : '') +
-      (operation.hidden ? '' : ' · ' + operation.textContent) :
-    'Pattern complete';
-  grid.mark(current, true);
-  grid.reveal();
+  const step = crochetStep(pattern, progress, colorGuide);
+  if (compact.matches) mobile.render(pattern, progress, step);
+  else desktop.render(step);
 }
 
 function saveProgress() {
   if (!unsaved.has(pattern.id)) storage.saveProgress(pattern.id, progress);
 }
 
+function updateProgress(next: Progress) {
+  progress = next;
+  sessions.set(pattern.id, next);
+  saveProgress();
+}
+
 function move(amount: -1 | 1) {
   if (mode !== 'work') return;
   if (amount === 1 && !hasStarted(progress)) {
     progress.started = true;
-    saveProgress();
-    renderProgress();
-    return;
+  } else {
+    const next = progress.offset + amount;
+    if (next < 0 || next > totalSteps(pattern, progress)) return;
+    if (!compact.matches) desktop.move(progress, next);
+    progress.offset = next;
+    progress.started = true;
   }
-  const next = progress.offset + amount;
-  if (next < 0 || next > totalSteps(pattern, progress)) return;
-  grid.updateStep(progress, Math.min(next, progress.offset), amount > 0);
-  progress.offset = next;
-  progress.started = true;
   saveProgress();
   renderProgress();
 }
-
-function jumpTo(tile: GridPosition) {
-  const previous = progress;
-  const next = jumpToStitch(pattern, previous, tile);
-  if (next === previous) return;
-  progress = next;
-  sessions.set(pattern.id, next);
-  saveProgress();
-  if (next.row !== previous.row || next.col !== previous.col) {
-    refreshTracking();
-  } else {
-    grid.setupProgress(progress);
-    renderProgress();
-  }
-}
-
-function paintAt(x: number, y: number, action: PaintAction) {
-  const index = chartRow(pattern, y).start + x;
-  const value = tool === 'erase' ? -1 : color;
-  if (pattern.cells[index] === value) return;
-  action.before ??= structuredClone(pattern);
-  pattern.cells[index] = value;
-  grid.paintCell(x, y);
-}
-
-function finishGesture() {
-  if (!gesture) return;
-  const before = gesture.type === 'stroke' ? gesture.before : undefined;
-  gesture = null;
-  workspace.classList.remove('is-panning');
-  if (!before) return;
-  remember(before);
-  savePattern();
-  updateCounts();
-  updateHistory();
-  refreshCursor();
-}
-
-viewport.addEventListener('pointerdown', event => {
-  if (event.button !== 0 || !event.isPrimary || gesture) return;
-  if (mode === 'work') {
-    clickOrigin = { x: event.clientX, y: event.clientY };
-    return;
-  }
-  if (tool === 'pan') {
-    if (event.pointerType === 'touch') return;
-    gesture = {
-      type: 'pan', id: event.pointerId, x: event.clientX, y: event.clientY,
-      left: viewport.scrollLeft, top: viewport.scrollTop,
-    };
-    workspace.classList.add('is-panning');
-  } else if (tool === 'reference') {
-    const layer = references.get(pattern.id);
-    if (event.target !== surface || !layer?.visible) return;
-    const { width, height } = surface.getBoundingClientRect();
-    gesture = {
-      type: 'reference', id: event.pointerId, x: event.clientX, y: event.clientY, layer,
-      start: { x: layer.x, y: layer.y }, scaleX: pattern.cols / width, scaleY: pattern.rows / height,
-    };
-    surface.focus({ preventScroll: true });
-    workspace.classList.add('is-panning');
-  } else {
-    if (event.target !== surface) return;
-    const tile = grid.positionAt(event);
-    if (!tile) return;
-    cursor = tile;
-    surface.focus({ preventScroll: true });
-    gesture = { type: 'stroke', id: event.pointerId, last: tile };
-    paintAt(tile.x, tile.y, gesture);
-    if (gesture.before) updateGlobe();
-  }
-  event.preventDefault();
-  viewport.setPointerCapture(event.pointerId);
-});
-
-viewport.addEventListener('pointermove', event => {
-  const active = gesture;
-  if (!active || active.id !== event.pointerId) return;
-  if (active.type === 'pan') {
-    viewport.scrollLeft = active.left + active.x - event.clientX;
-    viewport.scrollTop = active.top + active.y - event.clientY;
-  } else if (active.type === 'reference') {
-    moveReference(active.layer, active.start.x + (event.clientX - active.x) * active.scaleX,
-      active.start.y + (event.clientY - active.y) * active.scaleY);
-  } else {
-    const tile = grid.positionAt(event);
-    if (!tile) {
-      active.last = null;
-      return;
-    }
-    grid.traceStroke(active.last ?? tile, tile, (x, y) => paintAt(x, y, active));
-    active.last = cursor = tile;
-    if (active.before) updateGlobe();
-    refreshCursor();
-  }
-});
-
-for (const name of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
-  viewport.addEventListener(name, event => {
-    if (gesture?.id === event.pointerId) finishGesture();
-    if (name === 'pointercancel') clickOrigin = null;
-  });
-}
-
-viewport.addEventListener('click', event => {
-  if (mode !== 'work') return;
-  const origin = clickOrigin;
-  clickOrigin = null;
-  if (origin && Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 8) return;
-  if (event.target instanceof Node && surface.contains(event.target)) {
-    const tile = grid.positionAt(event);
-    if (tile) jumpTo(tile);
-  } else {
-    move(1);
-  }
-});
-
-window.addEventListener('pagehide', finishGesture);
-surface.addEventListener('focus', refreshCursor);
-surface.addEventListener('blur', refreshCursor);
-const arrows = new Map([['ArrowLeft', [-1, 0]], ['ArrowRight', [1, 0]], ['ArrowUp', [0, -1]], ['ArrowDown', [0, 1]]]);
-const toolShortcuts = new Map<string, Tool>([['p', 'paint'], ['e', 'erase'], ['h', 'pan'], ['r', 'reference']]);
-
-document.addEventListener('keydown', event => {
-  const target = event.target;
-  if (mode === 'collection' || event.defaultPrevented || event.isComposing || document.querySelector('dialog[open]') ||
-    !(target instanceof Element) || target.closest('input, select, textarea, [contenteditable]')) return;
-
-  if (mode === 'work') {
-    if (event.ctrlKey || event.metaKey || event.altKey) return;
-    const keyboardClick = (event.key === ' ' || event.key === 'Enter') && !target.closest('button, a');
-    if (keyboardClick || event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-      event.preventDefault();
-      if (!event.repeat) move(event.key === 'ArrowLeft' ? -1 : 1);
-    }
-    return;
-  }
-
-  if ((event.ctrlKey || event.metaKey) && !event.altKey && ['z', 'y'].includes(event.key.toLowerCase())) {
-    event.preventDefault();
-    if (event.key.toLowerCase() === 'y' || event.shiftKey) stepHistory(redo, undo);
-    else stepHistory(undo, redo);
-    return;
-  }
-
-  if (event.ctrlKey || event.metaKey || event.altKey) return;
-  const shortcut = toolShortcuts.get(event.key.toLowerCase());
-  if (shortcut && (target === surface || target.closest('#edit-tools'))) {
-    setTool(shortcut);
-    refreshCursor();
-  }
-  if (target !== surface) return;
-  const arrow = arrows.get(event.key);
-  if (arrow) {
-    event.preventDefault();
-    if (tool === 'reference') {
-      const layer = references.get(pattern.id);
-      if (layer) moveReference(layer, layer.x + arrow[0], layer.y + arrow[1]);
-      return;
-    }
-    cursor = grid.moveCursor(cursor, arrow[0], arrow[1]);
-    refreshCursor();
-    grid.reveal();
-  } else if (event.key === ' ' || event.key === 'Enter') {
-    event.preventDefault();
-    if (event.repeat || tool === 'pan' || tool === 'reference') return;
-    const action: PaintAction = {};
-    paintAt(cursor.x, cursor.y, action);
-    if (!action.before) return;
-    remember(action.before);
-    savePattern();
-    updateGlobe();
-    updateCounts();
-    updateHistory();
-    refreshCursor();
-  }
-});
-
-function openColor(index: number | null = null) {
-  editingColor = index;
-  const entry = index === null ? undefined : pattern.palette[index];
-  byId('color-name', 'input').value = entry?.name ?? '';
-  byId('color-value', 'input').value = entry?.hex ?? '#739a8c';
-  setText('color-dialog-title', entry ? 'Edit color' : 'Add color');
-  byId('color-delete', 'button').hidden = !entry || pattern.palette.length === 1;
-  byId('color-dialog', 'dialog').showModal();
-}
-
-function returnToColor(index: number) {
-  const button = palette.children[index]?.querySelector('.color-choice');
-  (button instanceof HTMLButtonElement ? button : byId('color-add', 'button')).focus();
-}
-
-byId('color-form').addEventListener('submit', event => {
-  event.preventDefault();
-  if (editingColor === null && pattern.palette.length >= limits.colors) return;
-  const name = byId('color-name', 'input').value.trim();
-  if (!name) {
-    byId('color-name', 'input').value = '';
-    byId('color-name', 'input').reportValidity();
-    return;
-  }
-  const index = editingColor ?? pattern.palette.length;
-  color = index;
-  applyChange(setPatternColor(pattern, index, { name, hex: byId('color-value', 'input').value }));
-  setTool('paint');
-  byId('color-dialog', 'dialog').close();
-  returnToColor(index);
-});
-
-const removeColorDialog = byId('remove-color-dialog', 'dialog');
-
-function deleteColor(fill: boolean) {
-  if (editingColor === null || pattern.palette.length === 1) return;
-  const removed = editingColor;
-  const remapped = removePatternColor(pattern, removed, fill);
-  color = color > removed ? color - 1 : Math.min(color, remapped.palette.length - 1);
-  applyChange({ ...pattern, ...remapped });
-  removeColorDialog.close();
-  byId('color-dialog', 'dialog').close();
-  returnToColor(color);
-}
-
-byId('color-delete', 'button').addEventListener('click', () => {
-  if (editingColor === null || pattern.palette.length === 1) return;
-  const stitches = counts(pattern).colors[editingColor];
-  if (stitches === 0) {
-    deleteColor(false);
-    return;
-  }
-  const name = pattern.palette[editingColor].name;
-  setText('remove-color-note', `What should happen to the ${format(stitches)} ${stitches === 1 ? 'stitch' : 'stitches'} using ${name}?`);
-  removeColorDialog.showModal();
-});
-byId('remove-color-fill').addEventListener('click', () => deleteColor(true));
-byId('remove-color-unassigned').addEventListener('click', () => deleteColor(false));
-
-const reduceColorDialog = byId('reduce-color-dialog', 'dialog');
-const reduceColorCount = byId('reduce-color-count', 'select');
-
-function colorReduction() {
-  return reducePatternPalette(pattern, Number(reduceColorCount.value), { keepUnused: true });
-}
-
-function updateReductionPreview() {
-  const swatches = colorReduction().palette.map(({ name, hex }) => {
-    const swatch = document.createElement('span');
-    swatch.className = 'swatch';
-    swatch.style.backgroundColor = hex;
-    swatch.setAttribute('role', 'listitem');
-    swatch.setAttribute('aria-label', name);
-    swatch.title = name;
-    return swatch;
-  });
-  byId('reduce-color-preview').replaceChildren(...swatches);
-}
-
-byId('reduce-colors').addEventListener('click', () => {
-  const options = Array.from({ length: pattern.palette.length - 1 }, (_, index) => {
-    const count = index + 1;
-    const profile = pattern.colorProfiles?.some(({ palette }) => palette.length === count);
-    return new Option(`${count} ${count === 1 ? 'color' : 'colors'}${profile ? ' (profile)' : ''}`, String(count));
-  });
-  reduceColorCount.replaceChildren(...options);
-  reduceColorCount.value = String(options.length);
-  updateReductionPreview();
-  reduceColorDialog.showModal();
-});
-reduceColorCount.addEventListener('change', updateReductionPreview);
-byId('reduce-color-form', 'form').addEventListener('submit', event => {
-  event.preventDefault();
-  const reduction = colorReduction();
-  applyChange({ ...pattern, ...reduction });
-  reduceColorDialog.close();
-  if (reduction.palette.length === 1) returnToColor(color);
-  status(`Palette reduced to ${reduction.palette.length} ${reduction.palette.length === 1 ? 'color' : 'colors'}.`);
-});
 
 function renderLibrary() {
   const list = byId('library-list');
@@ -773,8 +236,8 @@ function renderLibrary() {
     if (entry.id === pattern.id) open.setAttribute('aria-current', 'true');
     open.addEventListener('click', () => {
       byId('library-dialog', 'dialog').close();
-      if (entry.id !== pattern.id || mode === 'collection') selectPattern(entry, mode === 'work' ? 'work' : 'edit');
-      if (mode === 'work') surface.focus({ preventScroll: true });
+      if (entry.id !== pattern.id || mode === 'catalog') selectPattern(entry, mode === 'work' ? 'work' : 'edit');
+      if (mode === 'work') focusCrochet();
     });
     const remove = document.createElement('button');
     remove.className = 'icon-button danger';
@@ -787,7 +250,7 @@ function renderLibrary() {
       patterns.delete(entry.id);
       sessions.delete(entry.id);
       unsaved.delete(entry.id);
-      removeReference(entry.id);
+      editor.removeReference(entry.id);
       if (entry.id === pattern.id) {
         const remaining = patterns.values().next().value;
         if (remaining) {
@@ -812,7 +275,7 @@ async function importFile(file: File | undefined) {
   const imported = deserializePattern(await file.text());
   if (byId('library-dialog', 'dialog').open) byId('library-dialog', 'dialog').close();
   selectPattern(imported.pattern, mode === 'work' ? 'work' : 'edit', imported.progress);
-  if (mode === 'work') surface.focus({ preventScroll: true });
+  if (mode === 'work') focusCrochet();
   status('Opened “' + imported.pattern.name + '”.');
 }
 
@@ -828,304 +291,17 @@ function exportPattern() {
   status('Pattern and progress exported as JSON.');
 }
 
-function resizeTo(rows: number, cols: number) {
-  if (rows === pattern.rows && cols === pattern.cols) return true;
-  if (!approveResize(rows, cols)) return false;
-  applyChange(resizePattern(pattern, rows, cols));
-  return true;
-}
-
-resizeForm.addEventListener('submit', event => {
-  event.preventDefault();
-  const rows = rowsInput.valueAsNumber;
-  const cols = pattern.shape === 'sphere' ? rows * 2 : colsInput.valueAsNumber;
-  if (!resizeTo(rows, cols)) {
-    rowsInput.valueAsNumber = pattern.rows;
-    colsInput.valueAsNumber = pattern.cols;
-  }
-});
-
-const scaleDialog = byId('scale-dialog', 'dialog');
-const scaleForm = byId('scale-form', 'form');
-const scaleLink = byId('scale-link', 'button');
-const scaleAll = byId('scale-all', 'select');
-const scaleX = byId('scale-x', 'select');
-const scaleY = byId('scale-y', 'select');
-let scaleLinked = true;
-
-function setScaleChoices(select: HTMLSelectElement, length: number) {
-  const options: HTMLOptionElement[] = [];
-  for (let divisor = length; divisor >= 2; divisor--) options.push(new Option(`÷${divisor}`, String(-divisor)));
-  for (let factor = 1; factor <= limits.dimension / length; factor++) options.push(new Option(`×${factor}`, String(factor)));
-  select.replaceChildren(...options);
-  select.value = '1';
-}
-
-function scaleFactors() {
-  return { x: Number((scaleLinked ? scaleAll : scaleX).value), y: Number((scaleLinked ? scaleAll : scaleY).value) };
-}
-
-function updateScaleForm() {
-  byId('scale-all-field').hidden = !scaleLinked;
-  byId('scale-axes').hidden = scaleLinked;
-  scaleLink.setAttribute('aria-pressed', String(scaleLinked));
-  scaleLink.querySelector('use')?.setAttribute('href', scaleLinked ? '#link' : '#unlink');
-  const { x, y } = scaleFactors();
-  const { cols, rows } = scaledFlatSize(pattern, x, y);
-  setText('scale-size', `${cols} columns × ${rows} rows`);
-  byId('scale-apply', 'button').disabled = rows === pattern.rows && cols === pattern.cols;
-}
-
-byId('scale-open').addEventListener('click', () => {
-  if (pattern.shape !== 'flat') return;
-  setScaleChoices(scaleAll, Math.max(pattern.rows, pattern.cols));
-  setScaleChoices(scaleX, pattern.cols);
-  setScaleChoices(scaleY, pattern.rows);
-  scaleLinked = true;
-  updateScaleForm();
-  scaleDialog.showModal();
-});
-scaleLink.addEventListener('click', () => {
-  if (scaleLinked) {
-    const factor = Number(scaleAll.value);
-    for (const [select, length] of [[scaleX, pattern.cols], [scaleY, pattern.rows]] as const) {
-      select.value = String(length === 1 && factor < 0 ? 1 : Math.max(-length, factor));
-    }
-  } else if (scaleX.value === scaleY.value) {
-    scaleAll.value = scaleX.value;
-  }
-  scaleLinked = !scaleLinked;
-  updateScaleForm();
-});
-scaleForm.addEventListener('change', updateScaleForm);
-scaleForm.addEventListener('submit', event => {
-  event.preventDefault();
-  const { x, y } = scaleFactors();
-  const { rows, cols } = scaledFlatSize(pattern, x, y);
-  if ((rows === pattern.rows && cols === pattern.cols) || !approveResize(rows, cols, true)) return;
-  applyChange(scaleFlatPattern(pattern, x, y));
-  scaleDialog.close();
-  status(`Design scaled to ${cols} × ${rows} stitches.`);
-});
-
-referenceFit.addEventListener('click', () => {
-  const layer = references.get(pattern.id);
-  if (!layer || pattern.shape !== 'flat' || !resizeForm.reportValidity()) return;
-  const { rows, cols } = fitImageToGrid(layer.width, layer.height, {
-    rows: rowsInput.valueAsNumber, cols: colsInput.valueAsNumber,
-  });
-  if (!resizeTo(rows, cols)) return;
-  rowsInput.valueAsNumber = rows;
-  colsInput.valueAsNumber = cols;
-  moveReference(layer, 0, 0);
-  status(`Grid fitted to the image at ${cols} × ${rows} stitches.`);
-});
-
-referenceVisible.addEventListener('change', () => {
-  const layer = references.get(pattern.id);
-  if (!layer) return;
-  layer.visible = referenceVisible.checked;
-  refreshReference();
-});
-referenceCenter.addEventListener('click', () => {
-  const layer = references.get(pattern.id);
-  if (layer) moveReference(layer, 0, 0);
-});
-byId('reference-remove').addEventListener('click', () => {
-  removeReference(pattern.id);
-  refreshReference();
-  status('Reference image removed.');
-  surface.focus({ preventScroll: true });
-});
-
-nameInput.addEventListener('change', () => {
-  const name = nameInput.value.trim();
-  nameInput.value = name || pattern.name;
-  if (name && name !== pattern.name) {
-    applyChange({ ...pattern, name, cells: pattern.cells.slice() });
-  }
-});
-
-const newShape = byId('new-shape', 'select');
-const newTemplate = byId('new-template', 'select');
-const newTemplateColors = byId('new-template-colors', 'select');
-const newRounds = byId('new-rounds', 'input');
-const newRows = byId('new-rows', 'input');
-const newCols = byId('new-cols', 'input');
-const newName = byId('new-name', 'input');
-const patternDialog = byId('pattern-dialog', 'dialog');
-let creationTemplates: PatternTemplate[] = [];
-let suggestedName = '';
-
-function selectedTemplate(): PatternTemplate | undefined {
-  return creationTemplates.find(entry => entry.key === newTemplate.value);
-}
-
-function refreshTemplateOptions() {
-  const sphere = newShape.value === 'sphere';
-  const previous = newTemplate.value;
-  const matching = creationTemplates.filter(({ pattern }) => (pattern.shape === 'sphere') === sphere);
-  newTemplate.replaceChildren(new Option('Blank', 'blank'), ...matching.map(({ pattern, key }) => new Option(pattern.name, key)));
-  if (matching.some(({ key }) => key === previous)) newTemplate.value = previous;
-}
-
-function patternDraft(name: string): Pattern {
-  const sphere = newShape.value === 'sphere';
-  const rows = sphere ? newRounds.valueAsNumber : newRows.valueAsNumber;
-  const cols = sphere ? rows * 2 : newCols.valueAsNumber;
-  const template = selectedTemplate();
-  if (template) {
-    return copyPattern(deriveTemplate(template, { rows, cols }, Number(newTemplateColors.value)), name);
-  }
-  return sphere ? newSphere(rows, name) : newPattern(rows, cols, name);
-}
-
-function refreshCreation() {
-  const sphere = newShape.value === 'sphere';
-  patternDialog.dataset.shape = newShape.value;
-  byId('new-flat-fields').hidden = sphere;
-  byId('new-sphere-fields').hidden = !sphere;
-  newRows.disabled = sphere;
-  newCols.disabled = sphere;
-  newRounds.disabled = !sphere;
-  const rounds = newRounds.valueAsNumber;
-  const showPreview = sphere && isSphereSize(rounds) && newRounds.validity.valid;
-  byId('create-sphere-view').hidden = !showPreview;
-  if (!showPreview) {
-    setText('sphere-summary', '');
-    return;
-  }
-  const { goreWidth, stitches } = sphereLayout(rounds);
-  setText('sphere-summary', format(goreWidth * 6) + ' stitches at widest · ' + format(stitches) + ' total');
-  createGlobe.show(patternDraft(newName.value));
-}
-
-function applyTemplateChoice() {
-  const template = selectedTemplate();
-  const chosen = template?.pattern;
-  setColorChoices(newTemplateColors, template);
-  byId('new-template-colors-field').hidden = !chosen || chosen.palette.length < 2;
-  if (!newName.value.trim() || newName.value === suggestedName) newName.value = chosen?.name ?? '';
-  suggestedName = chosen?.name ?? '';
-  newRounds.max = String(chosen?.shape === 'sphere' ? chosen.rows : sphereSizes.max);
-  newRows.max = String(chosen && chosen.shape !== 'sphere' ? chosen.rows : limits.dimension);
-  newCols.max = String(chosen && chosen.shape !== 'sphere' ? chosen.cols : limits.dimension);
-  setText('new-rounds-note', 'Use a multiple of 3 from 6 to ' + newRounds.max + '.');
-  if (template) {
-    if (template.pattern.shape === 'sphere') newRounds.valueAsNumber = template.recommended.rows;
-    else {
-      newRows.valueAsNumber = template.recommended.rows;
-      newCols.valueAsNumber = template.recommended.cols;
-    }
-  }
-  refreshCreation();
-}
-
-newShape.addEventListener('change', () => {
-  refreshTemplateOptions();
-  applyTemplateChoice();
-});
-newRounds.addEventListener('input', refreshCreation);
-newRows.addEventListener('input', () => {
-  const master = selectedTemplate()?.pattern;
-  if (newShape.value !== 'flat' || !master || !newRows.validity.valid) return;
-  newCols.valueAsNumber = Math.max(1, Math.round(newRows.valueAsNumber * master.cols / master.rows));
-});
-newTemplate.addEventListener('change', applyTemplateChoice);
-newTemplateColors.addEventListener('change', refreshCreation);
-
-byId('create-form', 'form').addEventListener('submit', event => {
-  event.preventDefault();
-  const name = newName.value.trim();
-  if (!name) {
-    newName.value = '';
-    newName.reportValidity();
-    return;
-  }
-  const fresh = patternDraft(name);
-  patternDialog.close();
-  selectPattern(fresh, 'edit', newProgress(fresh));
-  status('Created “' + fresh.name + '”.');
-});
-
-const startRow = byId('start-row', 'input');
-const startCol = byId('start-col', 'input');
-function updateStartLimit() {
-  const row = startRow.valueAsNumber;
-  if (!Number.isInteger(row) || row < 1 || row > pattern.rows) return;
-  const { stitches } = chartRow(pattern, pattern.rows - row);
-  startCol.max = String(stitches);
-  if (startCol.valueAsNumber > stitches) startCol.valueAsNumber = stitches;
-}
-
-startRow.addEventListener('input', updateStartLimit);
-byId('progress-settings').addEventListener('click', () => {
-  const sphere = pattern.shape === 'sphere';
-  setText('start-row-name', sphere ? 'Starting round' : 'Starting row');
-  setText('start-col-name', sphere ? 'Stitch from left' : 'Starting column');
-  setText('progress-origin-help', sphere ? 'Count rounds from the bottom and stitches from the left. Work in a continuous spiral.' :
-    'Count rows from the bottom and columns from the left.');
-  byId('start-alternate-field').hidden = sphere;
-  startRow.max = String(pattern.rows);
-  startRow.valueAsNumber = progress.row;
-  startCol.valueAsNumber = progress.col;
-  updateStartLimit();
-  byId('start-direction', 'select').value = progress.direction;
-  byId('start-alternate', 'input').checked = progress.alternate;
-  byId('progress-reset-note').hidden = !hasStarted(progress);
-  byId('progress-dialog', 'dialog').showModal();
-});
-
-byId('progress-form').addEventListener('submit', event => {
-  event.preventDefault();
-  progress = newProgress(pattern, {
-    row: startRow.valueAsNumber,
-    col: startCol.valueAsNumber,
-    direction: byId('start-direction', 'select').value === 'ltr' ? 'ltr' : 'rtl',
-    alternate: byId('start-alternate', 'input').checked,
-  });
-  sessions.set(pattern.id, progress);
-  saveProgress();
-  byId('progress-dialog', 'dialog').close();
-  grid.drawPattern(pattern, progress.direction, false);
-  refreshTracking();
-});
-
-byId('new-pattern').addEventListener('click', async () => {
-  byId('create-form', 'form').reset();
-  suggestedName = '';
-  newTemplate.value = 'blank';
-  refreshTemplateOptions();
-  applyTemplateChoice();
-  patternDialog.showModal();
-  const templateStatus = byId('new-template-status');
-  templateStatus.hidden = creationTemplates.length > 0;
-  templateStatus.textContent = 'Loading templates…';
-  try {
-    creationTemplates = await getTemplates();
-    refreshTemplateOptions();
-    templateStatus.hidden = true;
-  } catch {
-    templateStatus.hidden = false;
-    templateStatus.textContent = 'Templates could not be loaded.';
-  }
-});
 byId('library-open').addEventListener('click', () => {
   renderLibrary();
   byId('library-dialog', 'dialog').showModal();
 });
 byId('edit-mode').addEventListener('click', () => setMode('edit'));
-byId('collection-mode').addEventListener('click', () => setMode('collection'));
+byId('catalog-mode').addEventListener('click', () => setMode('catalog'));
 byId('image-open').addEventListener('click', imageImporter.open);
 byId('work-mode').addEventListener('click', () => {
   setMode('work');
-  surface.focus({ preventScroll: true });
+  focusCrochet();
 });
-nextStitch.addEventListener('click', () => move(1));
-byId('previous-stitch', 'button').addEventListener('click', () => move(-1));
-byId('undo-action', 'button').addEventListener('click', () => stepHistory(undo, redo));
-byId('redo-action', 'button').addEventListener('click', () => stepHistory(redo, undo));
-byId('color-add', 'button').addEventListener('click', () => openColor());
 byId('save-pattern').addEventListener('click', () => {
   if (savePattern()) status('Saved “' + pattern.name + '” in this browser.');
 });
@@ -1140,15 +316,6 @@ byId('export-pattern').addEventListener('click', () => {
 for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-close]')) {
   const id = button.dataset.close;
   if (id) button.addEventListener('click', () => byId(id, 'dialog').close());
-}
-for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-tool]')) {
-  const tool = button.dataset.tool;
-  if (tool === 'paint' || tool === 'erase' || tool === 'pan' || tool === 'reference') {
-    button.addEventListener('click', () => {
-      setTool(tool);
-      if (tool === 'reference') surface.focus({ preventScroll: true });
-    });
-  }
 }
 for (const id of ['import-open', 'library-import']) {
   byId(id).addEventListener('click', () => fileInput.click());

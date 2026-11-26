@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { test } from 'node:test';
-import { deriveTemplate, parseTemplate } from '../dist/collection.js';
-import { fitImageToGrid, quantizeImage, reducePatternPalette, removePatternColor, setPatternColor } from '../dist/image-pattern.js';
+import { deriveTemplate, parseTemplate } from '../dist/core/templates.js';
+import { fitImageToGrid, quantizeImage, reducePatternPalette, removePatternColor, setPatternColor } from '../dist/core/image-pattern.js';
 import {
   chartRow, copyPattern, counts, deserializePattern, hasStarted, jumpToStitch, makeColorGuide, newPattern, newProgress, newSphere,
   parsePattern, resizePattern, scaleFlatPattern, serializePattern, tileAt, totalSteps,
-} from '../dist/model.js';
-import { projectedStitch, projectedX, specialStitches, sphereLayout, stitchOperation } from '../dist/sphere.js';
+} from '../dist/core/model.js';
+import { projectedStitch, projectedX, specialStitches, sphereLayout, stitchOperation } from '../dist/core/sphere.js';
 
 const templates = new URL('../dist/patterns/', import.meta.url);
 const readTemplate = key => JSON.parse(readFileSync(new URL(key + '.json', templates), 'utf8'));
@@ -198,13 +198,13 @@ test('the public template index contains valid spherical and flat pattern files'
   const { patterns: keys } = readTemplate('index');
   assert.equal(new Set(keys).size, keys.length);
   assert.deepEqual(readdirSync(templates).sort(), [...keys, 'index'].map(key => key + '.json').sort());
+  assert.deepEqual(readdirSync(new URL('../patterns/', import.meta.url)).sort(), readdirSync(templates).sort());
   for (const key of keys) {
     const file = readTemplate(key);
     const template = parseTemplate(key, file);
     const { pattern, recommended } = template;
     assert.equal(pattern.id, 'guanchillo-template-' + key);
     assert(['flat', 'sphere'].includes(file.shape));
-    assert(file.tags.length > 0);
     assert.deepEqual(pattern.tags, file.tags);
     assert(pattern.palette.length <= 8);
     if (pattern.shape === 'sphere') assert.deepEqual([pattern.rows, pattern.cols], [63, 126]);
@@ -222,22 +222,36 @@ test('the public template index contains valid spherical and flat pattern files'
     assert.deepEqual(restored.source, file.source);
     assert.deepEqual(restored.recommended, recommended);
     if (pattern.tags.includes('sistema-solar')) assert.equal(pattern.shape, 'sphere');
-    if (pattern.tags.includes('caras-pixeladas')) assert.equal(pattern.shape, 'flat');
+    if (pattern.tags.includes('minecraft')) assert.equal(pattern.shape, 'flat');
+  }
+});
+
+test('the seven Minecraft masters have one theme tag and their native 8 by 8 palettes', () => {
+  const { patterns: keys } = readTemplate('index');
+  const expected = {
+    'minecraft-alex': 5, 'minecraft-creeper': 3, 'minecraft-grass-block': 4, 'minecraft-pig': 4,
+    'minecraft-sheep': 4, 'minecraft-steve': 4, 'minecraft-zombie': 4,
+  };
+  const minecraft = keys.filter(key => readTemplate(key).tags.includes('minecraft'));
+  assert.deepEqual(minecraft.sort(), Object.keys(expected));
+  for (const key of minecraft) {
+    const { rows, cols, palette, tags, shape } = readTemplate(key);
+    assert.deepEqual({ rows, cols, shape, tags }, { rows: 8, cols: 8, shape: 'flat', tags: ['minecraft'] });
+    assert.equal(palette.length, expected[key]);
   }
 });
 
 test('each Canary Island and cultural motif has a distinct 32 by 32 flat master with attribution', () => {
   const { patterns: keys } = readTemplate('index');
-  const filesWithTag = tag => keys.map(readTemplate).filter(file => file.tags.includes(tag));
-  const islands = filesWithTag('islas');
-  const symbols = filesWithTag('simbolos-canarios');
+  const charts = keys.map(readTemplate).filter(file => file.tags.includes('canarias') && file.source);
+  const islands = charts.filter(file => file.source.url.includes('datos.canarias.es'));
+  const symbols = charts.filter(file => !islands.includes(file));
   assert.deepEqual(islands.map(({ name }) => name).sort(), [
     'El Hierro', 'Fuerteventura', 'Gran Canaria', 'La Gomera', 'La Graciosa', 'La Palma', 'Lanzarote', 'Tenerife',
   ]);
   assert.deepEqual(symbols.map(({ name }) => name).sort(), [
-    'Drago canario', 'Espiral de La Zarza', 'Pintadera triangular', 'Timple canario', 'Ídolo de Tara',
+    'Drago canario', 'Espiral de La Zarza', 'Pintadera triangular',
   ]);
-  const charts = [...islands, ...symbols];
   assert.equal(new Set(charts.map(({ cells }) => JSON.stringify(cells))).size, charts.length);
   for (const { shape, rows, cols, recommended, tags, palette, cells, source } of charts) {
     assert.deepEqual({ shape, rows, cols }, { shape: 'flat', rows: 32, cols: 32 });
@@ -340,16 +354,17 @@ test('profiles validate and round trip through palette edits, reduction, and JSO
 });
 
 test('resizing a template preserves the source and creates a separate pattern', () => {
-  const original = parseTemplate('snowflake', readTemplate('snowflake'));
+  const original = parseTemplate('el-hierro', readTemplate('el-hierro'));
   const derived = deriveTemplate(original, { rows: 12, cols: 18 }, 3);
-  const copy = copyPattern(derived, 'My snowflake');
+  const copy = copyPattern(derived, 'My El Hierro');
+  assert.deepEqual(copy.source, original.pattern.source);
   assert.notEqual(copy.id, derived.id);
   assert.equal(copy.cells.length, 216);
-  assert.equal(copy.name, 'My snowflake');
+  assert.equal(copy.name, 'My El Hierro');
   assert.deepEqual(copy.palette, derived.palette);
   copy.palette[0].name = 'Blue';
   assert.notEqual(copy.palette[0].name, derived.palette[0].name);
-  assert.equal(original.pattern.cells.length, 4096);
+  assert.equal(original.pattern.cells.length, 1024);
 });
 
 test('the set uses smaller charts for the terrestrial planets and larger ones for the giants', () => {

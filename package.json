@@ -5,9 +5,11 @@
   "scripts": {
     "build": "tsc && node scripts/copy-static.js",
     "check": "tsc --noEmit",
-    "test": "npm run build && node --test tests/model.test.js"
+    "test": "npm run build && node --test tests/model.test.js tests/crochet.test.js",
+    "test:browser": "npm run build && node --test tests/browser.test.js"
   },
   "devDependencies": {
+    "playwright": "1.65.1",
     "typescript": "6.0.3"
   }
 }

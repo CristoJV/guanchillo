@@ -8,6 +8,9 @@
   <title>Guanchillo · Tapestry crochet patterns</title>
   <link rel="icon" href="favicon.svg">
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="views/crochet/desktop.css">
+  <link rel="stylesheet" href="views/crochet/mobile.css">
+  <link rel="stylesheet" href="views/editor/mobile.css">
   <script type="module" src="app.js"></script>
 </head>
 <body>
@@ -46,10 +49,11 @@
       <nav class="mode-switch" aria-label="Workspace mode">
         <button type="button" id="edit-mode" aria-pressed="true"><svg class="icon"><use href="#pencil"></use></svg> Design</button>
         <button type="button" id="work-mode" aria-pressed="false"><svg class="icon"><use href="#yarn"></use></svg> Crochet</button>
-        <button type="button" id="collection-mode" aria-pressed="false"><svg class="icon"><use href="#grid-icon"></use></svg> Collection</button>
+        <button type="button" id="catalog-mode" aria-pressed="false"><svg class="icon"><use href="#grid-icon"></use></svg> Catalog</button>
       </nav>
       <div class="header-actions">
-        <button class="button subtle" id="library-open" type="button"><svg class="icon"><use href="#folder"></use></svg> My patterns</button>
+        <button class="icon-button" id="mobile-settings" type="button" aria-label="Crochet settings" hidden><svg class="icon"><use href="#settings"></use></svg></button>
+        <button class="button subtle" id="library-open" type="button" aria-label="My patterns"><svg class="icon"><use href="#folder"></use></svg><span class="library-label">My patterns</span></button>
         <button class="button outline header-import" id="import-open" type="button"><svg class="icon"><use href="#import"></use></svg> Import</button>
       </div>
     </div>
@@ -66,11 +70,11 @@
         <button class="button primary" id="new-pattern" type="button"><svg class="icon"><use href="#plus"></use></svg> New pattern</button>
       </div>
     </div>
-    <p class="warning" id="storage-warning" role="alert" hidden></p>
+    <p class="warning" id="storage-warning" data-crochet-ignore role="alert" hidden></p>
 
     <div id="workspace" class="workspace" data-mode="edit">
       <aside id="edit-tools" class="panel tools-panel" aria-label="Editing tools">
-        <section>
+        <section class="editor-toolbar">
           <h2>Tools</h2>
           <div class="tool-list">
             <button type="button" data-tool="paint" aria-pressed="true"><svg class="icon"><use href="#pencil"></use></svg> Pencil <kbd>P</kbd></button>
@@ -82,29 +86,32 @@
             <button class="button outline" id="redo-action" type="button" aria-label="Redo" title="Redo (Ctrl or ⌘ + Shift + Z)"><svg class="icon"><use href="#redo"></use></svg></button>
           </div>
         </section>
-        <section class="dimensions">
-          <h2>Grid</h2>
-          <form id="resize-form">
-            <div class="field-grid">
-              <label><span id="size-row-name">Rows</span><input id="rows" type="number" min="1" max="256" required></label>
-              <label id="size-cols">Columns <input id="cols" type="number" min="1" max="256" required></label>
+        <details class="editor-disclosure" open>
+          <summary>Grid and reference</summary>
+          <section class="dimensions">
+            <h2>Grid</h2>
+            <form id="resize-form">
+              <div class="field-grid">
+                <label><span id="size-row-name">Rows</span><input id="rows" type="number" min="1" max="256" required></label>
+                <label id="size-cols">Columns <input id="cols" type="number" min="1" max="256" required></label>
+              </div>
+              <p class="form-note" id="sphere-size-note" hidden>Use a multiple of 3 from 6 to 126.</p>
+              <button class="button outline full" type="submit">Apply size</button>
+              <button class="button outline full" id="scale-open" type="button">Scale design</button>
+              <button class="button outline full" id="reference-fit" type="button" aria-describedby="reference-fit-note" hidden>Fit grid to image</button>
+              <p class="form-note" id="reference-fit-note" hidden>Fit uses Rows and Columns as maximums.</p>
+            </form>
+          </section>
+          <section id="reference-tools" hidden>
+            <h2>Reference image</h2>
+            <label class="check-field"><input id="reference-visible" type="checkbox"> Show reference</label>
+            <div class="reference-actions">
+              <button class="button outline" id="reference-move" type="button" data-tool="reference" aria-pressed="false" aria-keyshortcuts="R"><svg class="icon"><use href="#hand"></use></svg> Move image <kbd>R</kbd></button>
+              <button class="button outline" id="reference-center" type="button">Center image</button>
+              <button class="button subtle" id="reference-remove" type="button">Remove image</button>
             </div>
-            <p class="form-note" id="sphere-size-note" hidden>Use a multiple of 3 from 6 to 126.</p>
-            <button class="button outline full" type="submit">Apply size</button>
-            <button class="button outline full" id="scale-open" type="button">Scale design</button>
-            <button class="button outline full" id="reference-fit" type="button" aria-describedby="reference-fit-note" hidden>Fit grid to image</button>
-            <p class="form-note" id="reference-fit-note" hidden>Fit uses Rows and Columns as maximums.</p>
-          </form>
-        </section>
-        <section id="reference-tools" hidden>
-          <h2>Reference image</h2>
-          <label class="check-field"><input id="reference-visible" type="checkbox"> Show reference</label>
-          <div class="reference-actions">
-            <button class="button outline" id="reference-move" type="button" data-tool="reference" aria-pressed="false" aria-keyshortcuts="R"><svg class="icon"><use href="#hand"></use></svg> Move image <kbd>R</kbd></button>
-            <button class="button outline" id="reference-center" type="button">Center image</button>
-            <button class="button subtle" id="reference-remove" type="button">Remove image</button>
-          </div>
-        </section>
+          </section>
+        </details>
       </aside>
 
       <section class="panel board-panel" aria-labelledby="board-title">
@@ -125,7 +132,7 @@
             <div class="grid-shell" id="grid-shell">
               <div class="ruler ruler-top" id="ruler-top" aria-hidden="true"></div>
               <div class="ruler ruler-left" id="ruler-left" aria-hidden="true"></div>
-              <div id="grid-surface" class="grid-surface" role="group" tabindex="0" aria-label="Pattern grid" aria-describedby="grid-shortcuts">
+              <div id="grid-surface" class="grid-surface" data-crochet-pointer-ignore role="group" tabindex="0" aria-label="Pattern grid" aria-describedby="grid-shortcuts">
                 <div id="grid-reference" class="grid-reference" aria-hidden="true" hidden><img id="grid-reference-image" alt="" draggable="false"></div>
                 <canvas id="grid-colors" aria-hidden="true"></canvas>
                 <canvas id="grid-done" aria-hidden="true" hidden></canvas>
@@ -144,22 +151,25 @@
       </section>
 
       <aside id="edit-details" class="panel details-panel" aria-label="Pattern and palette">
-        <section class="globe-preview" id="editor-sphere-view" aria-labelledby="editor-sphere-title" hidden>
-          <h2 id="editor-sphere-title">3D preview</h2>
-          <div class="globe-stage">
-            <canvas id="editor-globe" width="256" height="256" tabindex="0" role="img" aria-label="Rotatable 3D preview of the current sphere" aria-describedby="editor-globe-help"></canvas>
-          </div>
-          <p class="globe-help" id="editor-globe-help">Drag or use arrow keys to rotate.</p>
-        </section>
-        <section>
-          <h2>My pattern</h2>
-          <label class="name-field">Name <input id="pattern-name" type="text" maxlength="80" required></label>
-          <div class="pattern-actions">
-            <button class="button save-button" id="save-pattern" type="button"><svg class="icon"><use href="#check"></use></svg> Save</button>
-            <button class="button outline export-button" id="export-pattern" type="button" aria-label="Export pattern" title="Export pattern and progress as JSON"><svg class="icon"><use href="#export"></use></svg></button>
-          </div>
-        </section>
-        <section>
+        <details class="editor-disclosure" open>
+          <summary>Pattern details</summary>
+          <section class="globe-preview" id="editor-sphere-view" aria-labelledby="editor-sphere-title" hidden>
+            <h2 id="editor-sphere-title">3D preview</h2>
+            <div class="globe-stage">
+              <canvas id="editor-globe" width="256" height="256" tabindex="0" role="img" aria-label="Rotatable 3D preview of the current sphere" aria-describedby="editor-globe-help"></canvas>
+            </div>
+            <p class="globe-help" id="editor-globe-help">Drag or use arrow keys to rotate.</p>
+          </section>
+          <section>
+            <h2>My pattern</h2>
+            <label class="name-field">Name <input id="pattern-name" type="text" maxlength="80" required></label>
+            <div class="pattern-actions">
+              <button class="button save-button" id="save-pattern" type="button"><svg class="icon"><use href="#check"></use></svg> Save</button>
+              <button class="button outline export-button" id="export-pattern" type="button" aria-label="Export pattern" title="Export pattern and progress as JSON"><svg class="icon"><use href="#export"></use></svg></button>
+            </div>
+          </section>
+        </details>
+        <section class="editor-palette">
           <div class="section-heading">
             <h2>Color palette</h2>
             <button class="icon-button add-color" id="color-add" type="button" aria-label="Add color" title="Add color"><svg class="icon"><use href="#plus"></use></svg></button>
@@ -189,29 +199,52 @@
           <p class="direction" id="round-note" hidden></p>
         </section>
         <section class="follow-actions">
-          <button class="button primary full" id="next-stitch" type="button">Start</button>
-          <button class="button outline full" id="previous-stitch" type="button">Previous stitch</button>
-          <button class="button subtle full" id="progress-settings" type="button"><svg class="icon"><use href="#settings"></use></svg> Set starting point</button>
+          <button class="button primary full" id="next-stitch" data-crochet-step type="button">Start</button>
+          <button class="button outline full" id="previous-stitch" data-crochet-step type="button">Previous stitch</button>
+          <button class="button subtle full" id="progress-settings" type="button"><svg class="icon"><use href="#settings"></use></svg> Settings</button>
         </section>
       </aside>
     </div>
-    <section id="collection-view" aria-label="Pattern collection" hidden>
-      <div class="collection-toolbar">
-        <div class="collection-filters" role="group" aria-label="Collection filters">
+    <section id="mobile-crochet" class="mobile-crochet" aria-label="Follow pattern" tabindex="-1" hidden>
+      <div class="mobile-progress">
+        <h1 id="mobile-pattern-name"></h1>
+        <div class="mobile-progress-text"><strong id="mobile-percent">0%</strong><span id="mobile-count"></span></div>
+        <progress id="mobile-progress" aria-label="Crochet progress" value="0"></progress>
+      </div>
+      <div class="panel mobile-pattern">
+        <p class="mobile-position"><span id="mobile-position"></span><span id="mobile-direction" role="img"></span></p>
+        <div id="mobile-stitches" class="mobile-stitches" role="list" aria-label="Visible stitches"></div>
+      </div>
+      <div class="panel mobile-instructions">
+        <div class="mobile-message" role="status" aria-atomic="true">
+          <p id="mobile-instruction"></p>
+          <p class="mobile-warning" id="mobile-color-warning" hidden></p>
+          <p id="mobile-operation" hidden></p>
+          <p class="mobile-warning" id="mobile-round-note" hidden></p>
+        </div>
+        <div class="mobile-crochet-actions">
+          <button class="button outline" type="button" id="mobile-previous" data-crochet-step>Back</button>
+          <button class="button primary" type="button" id="mobile-next" data-crochet-step>Start</button>
+        </div>
+      </div>
+    </section>
+    <section id="catalog-view" aria-label="Pattern catalog" hidden>
+      <div class="catalog-toolbar">
+        <div class="catalog-filters" role="group" aria-label="Catalog filters">
           <div>
-            <label for="collection-tag">Tag</label>
-            <select id="collection-tag" disabled><option value="">All tags</option></select>
+            <label for="catalog-tag">Tag</label>
+            <select id="catalog-tag" disabled><option value="">All tags</option></select>
           </div>
           <div>
-            <label for="collection-shape">Type</label>
-            <select id="collection-shape" disabled><option value="">All types</option></select>
+            <label for="catalog-shape">Type</label>
+            <select id="catalog-shape" disabled><option value="">All types</option></select>
           </div>
         </div>
-        <p id="collection-status" role="status"></p>
-        <button class="button outline" id="collection-retry" type="button" hidden>Reload templates</button>
+        <p id="catalog-status" role="status"></p>
+        <button class="button outline" id="catalog-retry" type="button" hidden>Reload templates</button>
       </div>
-      <div id="collection-gallery" class="collection-gallery"></div>
-      <template id="collection-card-template">
+      <div id="catalog-gallery" class="catalog-gallery"></div>
+      <template id="catalog-card-template">
         <article class="panel template-card">
           <div class="template-preview"><div class="template-motif"><canvas role="img"></canvas></div></div>
           <div class="template-details">
@@ -355,11 +388,12 @@
   </dialog>
 
   <dialog id="progress-dialog" aria-labelledby="progress-title">
+    <div class="dialog-heading"><h2 id="progress-title">Crochet settings</h2><button type="button" class="icon-button" id="progress-close" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
     <form id="progress-form">
-      <div class="dialog-heading"><h2 id="progress-title">Set starting point</h2><button type="button" class="icon-button" data-close="progress-dialog" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
+      <h3>Starting point</h3>
       <p id="progress-origin-help">Count rows from the bottom and columns from the left.</p>
       <div class="field-grid">
-        <label><span id="start-row-name">Starting row</span><input id="start-row" type="number" min="1" required autofocus></label>
+        <label><span id="start-row-name">Starting row</span><input id="start-row" type="number" min="1" required></label>
         <label><span id="start-col-name">Starting column</span><input id="start-col" type="number" min="1" required></label>
       </div>
       <label>Starting direction
@@ -367,8 +401,29 @@
       </label>
       <label class="check-field" id="start-alternate-field"><input id="start-alternate" type="checkbox"> Alternate direction on each row</label>
       <p id="progress-reset-note" hidden>Applying the starting point resets your stitch count.</p>
-      <div class="dialog-actions"><button class="button primary" type="submit">Apply starting point</button></div>
+      <button class="button primary" type="submit">Apply starting point</button>
     </form>
+    <section class="crochet-bindings" aria-labelledby="bindings-title">
+      <h3 id="bindings-title">Hands-free controls</h3>
+      <p>Assign a key or mouse button to either action. Touch and on-screen buttons keep working.</p>
+      <div class="binding-row">
+        <div><strong>Next stitch</strong><output id="binding-advance"></output></div>
+        <button class="button outline" id="assign-advance" type="button" aria-label="Assign next stitch control">Assign</button>
+        <button class="button subtle" id="clear-advance" type="button" aria-label="Reset next stitch control" hidden>Reset</button>
+      </div>
+      <div class="binding-row">
+        <div><strong>Previous stitch</strong><output id="binding-back"></output></div>
+        <button class="button outline" id="assign-back" type="button" aria-label="Assign previous stitch control">Assign</button>
+        <button class="button subtle" id="clear-back" type="button" aria-label="Reset previous stitch control" hidden>Reset</button>
+      </div>
+    </section>
+  </dialog>
+
+  <dialog id="capture-dialog" aria-labelledby="capture-title" aria-describedby="capture-help">
+    <div class="dialog-heading"><h2 id="capture-title"></h2></div>
+    <p id="capture-help" tabindex="-1" autofocus>Press the key or click the mouse button you want to use.</p>
+    <p class="capture-error" id="capture-error" role="status"></p>
+    <div class="dialog-actions"><button class="button outline" id="capture-cancel" type="button" data-close="capture-dialog">Cancel</button></div>
   </dialog>
 
   <input id="file-input" type="file" accept=".json,application/json" hidden>

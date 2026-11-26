@@ -1,0 +1,20 @@
+.progress-summary { display: flex; align-items: baseline; gap: 0.55rem; justify-content: space-between; color: var(--muted); font-size: 0.875rem; }
+.progress-summary strong { font: bold 2.3rem/1.05 var(--serif); color: var(--green); }
+progress { display: block; width: 100%; height: 0.65rem; margin-top: 0.7rem; accent-color: var(--green); }
+.coordinates { display: grid; grid-template-columns: 1fr 1fr; gap: 0.55rem; margin: 0 0 0.85rem; }
+.coordinates > div { border: 1px solid var(--line); border-radius: 0.5rem; background: #faf7ee; padding: 0.55rem 0.65rem; }
+.coordinates dt, .direction { color: var(--muted); font-size: 0.875rem; }
+.coordinates dd { margin: 0.05rem 0 0; font: bold 1.9rem var(--serif); color: var(--dark-green); font-variant-numeric: tabular-nums; }
+.current-color { display: flex; align-items: center; gap: 0.65rem; min-height: 2.65rem; overflow-wrap: anywhere; }
+.current-color .swatch { width: 2.15rem; height: 2.15rem; flex: none; }
+.direction { margin-top: 0.75rem; }
+.follow-actions { display: grid; gap: 0.54rem; }
+.follow-actions .primary { min-height: 3.25rem; }
+
+.stitch-legend, #sphere-legend { display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; }
+.stitch-legend { flex-basis: 100%; }
+.stitch-legend b { display: inline-grid; place-items: center; width: 1.05rem; background: var(--soft-green); color: var(--dark-green); border-radius: 0.24rem; }
+.stitch-guidance { margin-top: 0.6rem; color: var(--muted); font-size: 0.875rem; }
+.stitch-guidance.is-color-change { padding: 0.5rem 0.6rem; background: #f6e9dd; color: #743a21; border: 1px solid #e7c5ad; border-radius: 0.4rem; font-weight: 650; }
+.grid-cursor.is-color-change { color: #743a21; font-weight: 750; }
+.stitch-operation { margin-top: 0.62rem; padding: 0.4rem 0.55rem; border-radius: 0.4rem; background: var(--soft-green); color: var(--dark-green); font-size: 0.86rem; font-weight: 650; }
