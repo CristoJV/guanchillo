@@ -55,9 +55,9 @@ Use a project’s export button in **My patterns**, or **Export pattern** in Des
 ## Crochet
 
 1. Open a pattern and select **Crochet**. In **Settings**, choose the starting row or round, column and direction. Row 1 is at the bottom and column 1 is on the left. Applying a starting point resets the stitch count.
-2. Select **Start**. The instructions show how many full stitches to make in the current yarn and when to close a stitch with the next color. Same-color counts continue across rows and rounds.
+2. Select **Start**. The instruction counts stitches of the current color and type through the current row or round. When it is time to change yarn, the highlighted instruction names the color to use for closing that stitch.
 3. After each stitch, tap the work area, choose **Next**, or press **Space**. **Back** or the Left arrow returns one stitch. Navigation, settings and other controls use their own actions.
-4. On a phone, the strip shows up to eight stitches from the current row or round and moves with you. On desktop, you can click a stitch in the full chart to jump to it. The stitches before it along your path are marked complete. If you click before the configured starting point, the selected stitch becomes the new start.
+4. On a phone, the chart shows the active row or round between the next and previous ones, with up to eight stitches per line. **X** is a single crochet, **V** is an increase and **Λ** is a decrease. On desktop, you can click a stitch in the full chart to jump to it. The stitches before it along your path are marked complete. If you click before the configured starting point, the selected stitch becomes the new start.
 5. Open **Settings → Go to stitch** to correct several stitches at once. Enter the row or round and stitch number as shown in Crochet. The starting point and direction stay in place.
 6. Turn on **Keep screen awake while crocheting** in Settings if you want the display to stay on with Crochet visible and stitches pending. Settings shows whether the browser granted the request.
 

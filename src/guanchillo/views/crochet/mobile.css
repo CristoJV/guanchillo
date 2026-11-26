@@ -7,8 +7,8 @@
 
   .mobile-crochet {
     display: grid;
-    gap: 0.85rem;
-    padding-block: clamp(0.85rem, 3.2svh, 1.75rem);
+    gap: 0.65rem;
+    padding-block: clamp(0.65rem, 1.8svh, 1.5rem);
     max-width: 34rem;
     margin-inline: auto;
   }
@@ -33,59 +33,71 @@
   .mobile-progress progress { margin-top: 0.3rem; height: 0.48rem; }
   .mobile-pattern {
     display: grid;
-    gap: clamp(0.55rem, 2.5svh, 1.2rem);
+    gap: 0.45rem;
     padding: clamp(0.65rem, 3.2vw, 1.1rem);
-    padding-bottom: clamp(0.95rem, 3.3svh, 1.6rem);
     overflow: hidden;
     background: #f2ede3;
   }
   .mobile-position { align-items: center; font-weight: 650; }
   #mobile-direction { color: var(--dark-green); font-size: 1.25rem; line-height: 1; }
-  .mobile-stitches {
+  .mobile-stitch-window {
+    --stitch-gap: clamp(0.22rem, 1vw, 0.4rem);
     display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(0, 1fr);
-    gap: clamp(0.22rem, 1vw, 0.46rem);
-    width: min(100%, 29rem);
+    gap: var(--stitch-gap);
+    width: min(100%, 23rem);
     margin-inline: auto;
   }
+  .mobile-stitches {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: var(--stitch-gap);
+  }
+  .mobile-stitch-slot { aspect-ratio: 1; }
   .mobile-stitch {
-    display: block;
-    aspect-ratio: 1;
-    width: min(100%, 3.15rem);
-    justify-self: center;
+    display: grid;
+    place-items: center;
     border: 1px solid #252d2755;
-    border-radius: 0.32rem;
-    position: relative;
+    border-radius: 0.3rem;
+    font-size: clamp(0.8rem, 3.5vw, 1.1rem);
+    font-weight: 750;
+    line-height: 1;
   }
   .mobile-stitch[data-state="current"] {
     outline: 2px solid var(--dark-green);
     outline-offset: 1px;
     z-index: 1;
   }
-  .mobile-stitch[data-state="done"] { opacity: 0.48; }
-  .mobile-stitch[data-state="done"]::after {
-    content: '';
-    position: absolute;
-    inset: 24% 35% 31% 39%;
-    border: solid #fffdf9;
-    border-width: 0 2px 2px 0;
-    filter: drop-shadow(0 0 1px #252d27);
-    transform: rotate(45deg);
-  }
-  .mobile-stitch[data-state="outside"] { opacity: 0.25; }
-  .mobile-instructions { padding: clamp(0.75rem, 3.2vw, 1rem); }
+  .mobile-context .mobile-stitch, .mobile-stitch[data-state="done"] { opacity: 0.68; }
+  .mobile-stitch[data-state="outside"] { opacity: 0.42; }
+  .mobile-instructions { padding: clamp(0.7rem, 3.2vw, 1rem); }
   .mobile-message {
-    display: grid;
-    gap: 0.45rem;
+    block-size: clamp(7.3rem, 20svh, 8.5rem);
+    overflow: auto;
+    overscroll-behavior: contain;
     color: var(--dark-green);
     overflow-wrap: anywhere;
   }
-  #mobile-instruction { font-size: clamp(1.18rem, 4.6vw, 1.65rem); line-height: 1.22; font-weight: 700; }
-  .mobile-warning { padding: 0.51rem 0.65rem; border: 1px solid #e7c5ad; border-radius: 0.45rem; background: #faf0e6; color: #743a21; font-weight: 650; }
-  .mobile-warning.is-color-change { border-color: #a4532a; background: #f5e2d1; }
-  #mobile-operation { font-size: 0.9rem; font-weight: 650; }
-  .mobile-crochet-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0.55rem; margin-top: 0.8rem; }
+  #mobile-instruction {
+    display: block;
+    padding: 0.32rem 0.5rem;
+    border-radius: 0.35rem;
+    font-size: clamp(1.18rem, 4.6vw, 1.65rem);
+    line-height: 1.22;
+    font-weight: 700;
+  }
+  #mobile-instruction.is-color-change {
+    background: #f5e2d1;
+    color: #743a21;
+    box-shadow: inset 3px 0 #a4532a;
+  }
+  #mobile-operation, #mobile-round-note {
+    display: block;
+    padding-inline: 0.5rem;
+    margin-top: 0.25rem;
+    font-size: 0.9rem;
+    font-weight: 650;
+  }
+  .mobile-crochet-actions { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 0.55rem; margin-top: 0.7rem; }
   .mobile-crochet-actions button, #mobile-settings { min-height: 2.75rem; }
   #mobile-settings { min-width: 2.75rem; }
 }

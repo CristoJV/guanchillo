@@ -5,6 +5,7 @@ import { createServer } from 'node:http';
 import { after, before, test } from 'node:test';
 import { chromium, devices } from 'playwright';
 import { newPattern, newProgress, newSphere, serializePattern } from '../dist/core/model.js';
+import { deriveTemplate, parseTemplate } from '../dist/core/templates.js';
 
 const dist = new URL('../dist/', import.meta.url);
 const types = { html: 'text/html', js: 'text/javascript', css: 'text/css', json: 'application/json', svg: 'image/svg+xml' };
@@ -71,23 +72,31 @@ async function visibleText(page, id) {
 
 const phone = { ...devices['iPhone SE'], viewport: { width: 320, height: 568 }, reducedMotion: 'reduce' };
 
-test('mobile follows the sliding stitch window, warns before changing yarn and shares a saved v1 route with desktop', async t => {
+test('mobile shows three fixed lanes and highlights only the closing stitch, sharing JSON v1 progress with desktop', async t => {
   const page = await openPage(t, phone);
-  const pattern = newPattern(2, 12, 'Mobile color cue');
+  const pattern = newPattern(3, 12, 'Mobile color cue');
   pattern.palette = [{ name: 'Pink', hex: '#dd88aa' }, { name: 'Green', hex: '#44aa77' }];
   pattern.cells.fill(1);
-  pattern.cells.fill(0, 16);
+  pattern.cells.fill(0, 28);
   await importPattern(page, pattern);
   await page.locator('#work-mode').tap();
   assert.equal(await page.locator('#workspace').isVisible(), false);
   assert.equal(await visibleText(page, 'mobile-instruction'), 'Crochet 7 stitches in Pink.');
-  assert.equal(await visibleText(page, 'mobile-color-warning'), 'Then close the next stitch with Green.');
+  const instruction = page.locator('#mobile-instruction');
+  const highlight = page.locator('#mobile-instruction.is-color-change');
+  assert.equal(await highlight.count(), 0);
   const ordered = await page.locator('.site-header, .mobile-progress, .mobile-pattern, .mobile-instructions')
     .evaluateAll(elements => elements.map(element => element.getBoundingClientRect()));
   assert(ordered.every((rect, index) => !index || rect.top >= ordered[index - 1].bottom));
   assert(ordered.at(-1).bottom <= 568);
-  assert.equal(await page.locator('.mobile-stitch').count(), 8);
-  const firstCell = page.locator('.mobile-stitch').first();
+  const geometry = () => page.locator('.mobile-pattern, .mobile-instructions, .mobile-crochet-actions')
+    .evaluateAll(elements => elements.map(element => [element.offsetTop, element.offsetHeight]));
+  const initialGeometry = await geometry();
+  assert.equal(await page.locator('#mobile-stitches .mobile-stitch').count(), 8);
+  assert.equal(await page.locator('#mobile-stitches-next .mobile-stitch').count(), 8);
+  assert.equal(await page.locator('#mobile-stitches-previous').getAttribute('aria-hidden'), 'true');
+  const firstCell = page.locator('#mobile-stitches .mobile-stitch').first();
+  assert.equal(await firstCell.textContent(), 'X');
   assert.match(await firstCell.getAttribute('aria-label'), /Stitch 8,/);
 
   await page.locator('#mobile-stitches').tap();
@@ -96,21 +105,24 @@ test('mobile follows the sliding stitch window, warns before changing yarn and s
 
   for (let i = 0; i < 7; i++) await page.keyboard.press('ArrowRight');
   assert.equal(await value(page), 7);
-  assert.equal(await visibleText(page, 'mobile-instruction'), 'Crochet 1 stitch in Pink.');
-  assert.equal(await visibleText(page, 'mobile-color-warning'), 'Close this stitch with Green.');
+  assert.equal(await instruction.textContent(), 'Crochet this stitch in Pink but close it with Green.');
+  assert.equal(await highlight.count(), 1);
+  assert.deepEqual(await geometry(), initialGeometry);
   assert.match(await firstCell.getAttribute('aria-label'), /Stitch 12,/);
 
   await page.keyboard.press('ArrowRight');
   assert.equal(await value(page), 8);
-  assert.equal(await page.locator('#mobile-color-warning').isVisible(), false);
+  assert.equal(await instruction.textContent(), 'Crochet 4 stitches in Green (to end the row).');
+  assert.equal(await highlight.count(), 0);
   await page.reload();
-  assert.equal(await visibleText(page, 'mobile-count'), '8 / 24');
+  assert.equal(await visibleText(page, 'mobile-count'), '8 / 36');
 
   await page.setViewportSize({ width: 1200, height: 800 });
-  assert.equal(await visibleText(page, 'done-count'), '8 of 24 stitches');
+  assert.equal(await visibleText(page, 'done-count'), '8 of 36 stitches');
   assert.equal(await page.locator('#mobile-crochet').isVisible(), false);
+  assert.equal(await visibleText(page, 'current-run'), 'Crochet 4 stitches in Green (to end the row).');
   await page.keyboard.press('ArrowRight');
-  assert.equal(await visibleText(page, 'done-count'), '9 of 24 stitches');
+  assert.equal(await visibleText(page, 'done-count'), '9 of 36 stitches');
 
   await page.locator('#edit-mode').click();
   const downloaded = page.waitForEvent('download');
@@ -125,7 +137,13 @@ test('mobile follows the sliding stitch window, warns before changing yarn and s
   await page.locator('#file-input').setInputFiles(await download.path());
   await page.waitForFunction(id => JSON.parse(localStorage.getItem('guanchillo:v1:preferences')).activeId !== id, exported.id);
   await page.locator('#work-mode').tap();
-  assert.equal(await visibleText(page, 'mobile-count'), '9 / 24');
+  assert.equal(await visibleText(page, 'mobile-count'), '9 / 36');
+  for (let i = 0; i < 3; i++) await page.keyboard.press('ArrowRight');
+  assert.equal(await visibleText(page, 'mobile-position'), 'Row 2 · Stitch 1');
+  assert.equal(await page.locator('#mobile-stitches-next').getAttribute('aria-label'), 'Row 3');
+  assert.equal(await page.locator('#mobile-stitches-previous').getAttribute('aria-label'), 'Row 1');
+  assert.equal(await page.locator('.mobile-stitch[data-state="current"]').count(), 1);
+  assert.deepEqual(await geometry(), initialGeometry);
 });
 
 test('pedal settings capture keyboard and mouse, isolate controls, and persist across reload', async t => {
@@ -161,13 +179,13 @@ test('pedal settings capture keyboard and mouse, isolate controls, and persist a
   await page.locator('#mobile-instruction').click({ button: 'right' });
   assert.equal(await value(page), 0);
 
-  await page.mouse.move(30, 535);
+  await page.mouse.move(5, 535);
   await page.mouse.down();
   await page.mouse.move(100, 535);
-  await page.mouse.move(30, 535);
+  await page.mouse.move(5, 535);
   await page.mouse.up();
   assert.equal(await value(page), 0);
-  await page.mouse.click(30, 535);
+  await page.mouse.click(5, 535);
   assert.equal(await value(page), 1);
 
   await page.locator('.brand-mark').click({ button: 'right' });
@@ -203,6 +221,7 @@ test('the mobile sphere shows shaping, stuffing and finishing in the instruction
   await page.locator('#work-mode').tap();
   assert.match(await visibleText(page, 'mobile-round-note'), /Stuff the sphere/);
   assert.match(await visibleText(page, 'mobile-operation'), /Decrease/);
+  assert.equal(await page.locator('.mobile-stitch[data-state="current"]').textContent(), 'Λ');
   await page.locator('#mobile-next').tap();
   assert.equal(await visibleText(page, 'mobile-percent'), '100%');
   assert.equal(await visibleText(page, 'mobile-instruction'), 'Pattern complete.');
@@ -255,7 +274,7 @@ test('Catalog migrates the saved view and shows seven Minecraft cards in one mob
   assert.equal(await alex.locator('[data-template-colors]').inputValue(), '5');
   await alex.getByRole('button', { name: 'Crochet Alex' }).tap();
   assert.equal(await visibleText(page, 'mobile-pattern-name'), 'Alex');
-  assert.equal(await page.locator('.mobile-stitch').count(), 8);
+  assert.equal(await page.locator('#mobile-stitches .mobile-stitch').count(), 8);
 });
 
 test('desktop keeps chart jumps, keyboard navigation and clicks outside the chart', async t => {
@@ -325,6 +344,10 @@ test('Go to stitch corrects mobile progress without resetting the existing route
   await page.locator('#seek-point').fill('1');
   await page.getByRole('button', { name: 'Go to stitch' }).tap();
   assert.equal(await visibleText(page, 'mobile-position'), 'Round 2 · Stitch 1');
+  const active = page.locator('.mobile-stitch[data-state="current"]');
+  assert.equal(await active.textContent(), 'V');
+  assert.match(await active.getAttribute('aria-label'), /Increase/);
+  assert.equal(await page.locator('#mobile-stitches-previous .mobile-stitch').count(), 6);
   assert.equal(await value(page), 6);
 });
 
@@ -505,4 +528,32 @@ test('Escape restores a reference image after an intercepted drag', async t => {
   await page.keyboard.press('Escape');
   await page.mouse.up();
   assert.equal(await left(), initialLeft);
+});
+
+test('the revised Earth opens from Catalog alongside an earlier version with its saved progress', async t => {
+  const page = await openPage(t, phone);
+  const file = JSON.parse(await readFile(new URL('patterns/earth.json', dist), 'utf8'));
+  const earth = parseTemplate('earth', file);
+  const chart = deriveTemplate(earth, earth.recommended, 5);
+  const oldChart = { ...chart, id: chart.id.replace(/-r2$/, '') };
+  const oldProgress = { ...newProgress(oldChart), offset: 4 };
+  await page.evaluate(({ chart, progress }) => {
+    localStorage.setItem('guanchillo:v1:pattern:' + chart.id, JSON.stringify(chart));
+    localStorage.setItem('guanchillo:v1:progress:' + chart.id, JSON.stringify(progress));
+  }, { chart: oldChart, progress: oldProgress });
+  await page.reload();
+
+  await page.locator('#catalog-mode').tap();
+  await page.locator('#catalog-search').fill('Earth');
+  const card = page.locator('.template-card:visible');
+  await card.locator('[data-template-colors]').selectOption('5');
+  await card.getByRole('button', { name: 'Crochet Earth' }).tap();
+  assert.equal(await visibleText(page, 'mobile-pattern-name'), 'Earth');
+  assert.equal(await value(page), 0);
+  const id = await page.evaluate(() => JSON.parse(localStorage.getItem('guanchillo:v1:preferences')).activeId);
+  assert.equal(id, chart.id);
+
+  await page.locator('#library-open').tap();
+  await page.getByRole('button', { name: 'Resume Earth' }).tap();
+  assert.equal(await value(page), 4);
 });

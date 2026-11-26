@@ -213,15 +213,18 @@
       </div>
       <div class="panel mobile-pattern">
         <p class="mobile-position"><span id="mobile-position"></span><span id="mobile-direction" role="img"></span></p>
-        <div id="mobile-stitches" class="mobile-stitches" role="list" aria-label="Visible stitches"></div>
+        <div id="mobile-stitch-window" class="mobile-stitch-window" role="group" aria-label="Stitch window">
+          <div id="mobile-stitches-next" class="mobile-stitches mobile-context" role="list"></div>
+          <div id="mobile-stitches" class="mobile-stitches" role="list"></div>
+          <div id="mobile-stitches-previous" class="mobile-stitches mobile-context" role="list"></div>
+        </div>
       </div>
       <div class="panel mobile-instructions">
-        <div class="mobile-message" role="status" aria-atomic="true">
-          <p id="mobile-instruction"></p>
-          <p class="mobile-warning" id="mobile-color-warning" hidden></p>
-          <p id="mobile-operation" hidden></p>
-          <p class="mobile-warning" id="mobile-round-note" hidden></p>
-        </div>
+        <p id="mobile-message" class="mobile-message" role="status" aria-atomic="true">
+          <span id="mobile-instruction"></span>
+          <span id="mobile-operation" hidden></span>
+          <span id="mobile-round-note" hidden></span>
+        </p>
         <div class="mobile-crochet-actions">
           <button class="button outline" type="button" id="mobile-previous" data-crochet-step>Back</button>
           <button class="button primary" type="button" id="mobile-next" data-crochet-step>Start</button>

@@ -351,7 +351,7 @@ export function totalSteps(pattern: PatternData, progress: Progress): number {
   return pattern.cells.length - pathStart(pattern, progress);
 }
 
-function rowMovesLeftToRight(progress: Progress, row: number): boolean {
+export function rowMovesLeftToRight(progress: Progress, row: number): boolean {
   const reverse = progress.alternate && (row - progress.row) % 2 !== 0;
   return (progress.direction === 'ltr') !== reverse;
 }
@@ -464,30 +464,4 @@ export function deserializePattern(json: string): { pattern: Pattern; progress: 
   const { progress, ...data } = parsePatternFile(value);
   const pattern: Pattern = { ...data, id: newPatternId() };
   return { pattern, progress: progress ?? newProgress(pattern) };
-}
-
-export function makeColorGuide(pattern: Pattern, progress: Progress) {
-  const runs: { color: number; end: number }[] = [];
-  const total = totalSteps(pattern, progress);
-  for (let offset = 0; offset < total; offset++) {
-    const tile = tileAt(pattern, progress, offset);
-    if (!tile) break;
-    const color = pattern.cells[tile.index];
-    const run = runs.at(-1);
-    if (run?.color === color) run.end = offset + 1;
-    else runs.push({ color, end: offset + 1 });
-  }
-
-  return (offset: number) => {
-    if (offset < 0 || offset >= total) return null;
-    let first = 0;
-    let last = runs.length - 1;
-    while (first < last) {
-      const middle = Math.floor((first + last) / 2);
-      if (offset < runs[middle].end) last = middle;
-      else first = middle + 1;
-    }
-    const nextColor = runs[first + 1]?.color;
-    return { fullStitches: runs[first].end - offset - (nextColor === undefined ? 0 : 1), nextColor };
-  };
 }

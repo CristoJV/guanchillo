@@ -1,5 +1,5 @@
 import { crochetStep } from './core/crochet.js';
-import { deserializePattern, examplePattern, hasStarted, jumpToStitch, limits, makeColorGuide, newPattern, newProgress,
+import { deserializePattern, examplePattern, hasStarted, jumpToStitch, limits, newPattern, newProgress,
   serializePattern, totalSteps, type Pattern, type Progress } from './core/model.js';
 import { makeScreenWakeLock } from './platform/screen-wake-lock.js';
 import { createStorage, type Mode } from './platform/storage.js';
@@ -39,7 +39,6 @@ const compact = compactLayout();
 let controls = storage.crochetControls();
 let pattern: Pattern;
 let progress: Progress;
-let colorGuide: ReturnType<typeof makeColorGuide>;
 let mode: Mode = preferences?.mode ?? 'edit';
 let keepAwake = preferences?.keepAwake ?? false;
 const screenWakeLock = makeScreenWakeLock(state => setText('screen-wake-status', state === 'active' ?
@@ -57,8 +56,7 @@ bindCrochetInput({
     const next = jumpToStitch(pattern, previous, tile);
     if (next === previous) return;
     updateProgress(next);
-    if (next.row !== previous.row || next.col !== previous.col) refreshTracking();
-    else prepareCrochetView();
+    prepareCrochetView();
   },
 });
 bindCrochetSettings({
@@ -66,7 +64,7 @@ bindCrochetSettings({
   applyStart(next) {
     updateProgress(next);
     grid.drawPattern(pattern, progress.direction, false);
-    refreshTracking();
+    prepareCrochetView();
   },
   applyStitch(next) {
     if (next === progress) return;
@@ -206,14 +204,9 @@ function setMode(nextMode: Mode) {
   if (browsing) void catalog.show();
   if (working) {
     setText('grid-shortcuts', 'Space to start or advance · Left arrow to go back');
-    refreshTracking();
+    prepareCrochetView();
   }
   savePreferences();
-}
-
-function refreshTracking() {
-  colorGuide = makeColorGuide(pattern, progress);
-  prepareCrochetView();
 }
 
 function prepareCrochetView() {
@@ -222,7 +215,7 @@ function prepareCrochetView() {
 }
 
 function renderProgress() {
-  const step = crochetStep(pattern, progress, colorGuide);
+  const step = crochetStep(pattern, progress);
   if (compact.matches) mobile.render(pattern, progress, step);
   else desktop.render(step);
   syncScreenWakeLock();

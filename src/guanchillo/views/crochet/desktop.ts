@@ -11,21 +11,10 @@ export function makeDesktopCrochet(grid: ReturnType<typeof makeGrid>, surface: H
   byId('previous-stitch', 'button').addEventListener('click', () => move(-1));
 
   function render(step: CrochetStep) {
-    const { current, color: entry, started, done, total, sphere, nextColor, roundNote } = step;
-    const cue = started ? step.cue : null;
-    const changingColor = cue?.fullStitches === 0 && nextColor !== undefined;
+    const { current, color: entry, started, done, total, sphere, instruction, changingColor, roundNote } = step;
     const guidance = byId('current-run');
-    let instruction = '';
-    if (changingColor) {
-      instruction = 'Change color to ' + nextColor + ' when closing this stitch.';
-    } else if (cue) {
-      const count = format(cue.fullStitches);
-      const stitches = cue.fullStitches === 1 ? 'stitch' : 'stitches';
-      instruction = cue.nextColor === undefined ? `${count} ${stitches} remaining in this color.` :
-        `${count} full ${stitches} before the color change.`;
-    }
     guidance.textContent = instruction;
-    guidance.hidden = !cue;
+    guidance.hidden = !current;
     guidance.classList.toggle('is-color-change', changingColor);
     cursorText.classList.toggle('is-color-change', changingColor);
     setText('percent', step.percent + '%');
@@ -50,7 +39,7 @@ export function makeDesktopCrochet(grid: ReturnType<typeof makeGrid>, surface: H
     byId('previous-stitch', 'button').disabled = done === 0;
     cursorText.textContent = current ?
       (sphere ? 'Round ' : 'Row ') + current.row + ' · Stitch ' + current.point + ' · ' +
-        (entry?.name ?? 'Unassigned') + (instruction ? ' · ' + instruction : '') +
+        instruction +
         (operation.hidden ? '' : ' · ' + operation.textContent) :
       'Pattern complete';
     grid.mark(current, true);

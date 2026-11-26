@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { deriveTemplate, parseTemplate } from '../dist/core/templates.js';
 import { fitImageToGrid, quantizeImage, reducePatternPalette, removePatternColor, setPatternColor } from '../dist/core/image-pattern.js';
 import {
-  chartRow, copyPattern, counts, deserializePattern, hasStarted, jumpToStitch, makeColorGuide, newPattern, newProgress, newSphere,
+  chartRow, copyPattern, counts, deserializePattern, hasStarted, jumpToStitch, newPattern, newProgress, newSphere,
   parsePattern, resizePattern, scaleFlatPattern, serializePattern, tileAt, totalSteps,
 } from '../dist/core/model.js';
 import { projectedStitch, projectedX, specialStitches, sphereLayout, stitchOperation } from '../dist/core/sphere.js';
@@ -110,24 +110,6 @@ test('JSON preserves sphere colors and progress and still accepts a flat version
   assert.deepEqual(JSON.parse(serializePattern(previousFile.pattern)).recommended, { rows: 2, cols: 3 });
   assert.equal(previousFile.progress.alternate, true);
   assert.deepEqual([0, 1, 2, 3, 4, 5].map(offset => tileAt(flat, previousFile.progress, offset).index), [5, 4, 3, 0, 1, 2]);
-});
-
-test('the yarn countdown excludes the color-change stitch and continues across rows', () => {
-  const pattern = newPattern(2, 4);
-  pattern.cells = [1, 2, 3, 3, 1, 0, 0, 0];
-  const progress = newProgress(pattern);
-  const guide = makeColorGuide(pattern, progress);
-  assert.deepEqual(Array.from({ length: 8 }, (_, offset) => guide(offset)), [
-    { fullStitches: 2, nextColor: 1 },
-    { fullStitches: 1, nextColor: 1 },
-    { fullStitches: 0, nextColor: 1 },
-    { fullStitches: 1, nextColor: 2 },
-    { fullStitches: 0, nextColor: 2 },
-    { fullStitches: 0, nextColor: 3 },
-    { fullStitches: 2, nextColor: undefined },
-    { fullStitches: 1, nextColor: undefined },
-  ]);
-  assert.equal(guide(8), null);
 });
 
 test('jumping to a stitch follows the current path and can move the start earlier', () => {
@@ -335,6 +317,31 @@ test('every Earth size uses its exact three-to-six-color palette', () => {
   const five = { ...earth.pattern, ...reducePatternPalette(earth.pattern, 5) };
   const three = reducePatternPalette(five, 3);
   assert.deepEqual(three.cells, reducePatternPalette(earth.pattern, 3).cells);
+});
+
+test('Earth revises only variants that use the shaped sand band and exports as JSON v1', () => {
+  const file = readTemplate('earth');
+  const earth = parseTemplate('earth', file);
+  const { recommended } = earth;
+  for (const colors of [3, 4, 5, 6]) {
+    const chart = deriveTemplate(earth, recommended, colors);
+    const originalId = `guanchillo-template-earth-24x48-${colors}-colors-profile`;
+    assert.equal(chart.id, colors <= 4 ? originalId : originalId + '-r2');
+    const exported = JSON.parse(serializePattern(chart, newProgress(chart)));
+    assert.equal(exported.version, 1);
+    assert.equal('variantRevisions' in exported, false);
+    assert.deepEqual(deserializePattern(JSON.stringify(exported)).pattern.cells, chart.cells);
+  }
+  const sandPerRow = chart => Array.from({ length: chart.rows }, (_, y) => {
+    const { start, stitches } = chartRow(chart, y);
+    return chart.cells.slice(start, start + stitches).filter(cell => cell === 4).length;
+  }).filter(Boolean);
+  const recommendedSand = sandPerRow(deriveTemplate(earth, recommended, 5));
+  assert(recommendedSand.length >= 3);
+  assert(recommendedSand[0] < Math.max(...recommendedSand.slice(1)));
+  const masterSand = sandPerRow(deriveTemplate(earth, earth.pattern, 5));
+  assert(new Set(masterSand).size >= 4);
+  assert.throws(() => parseTemplate('earth', { ...file, variantRevisions: { 7: 2 } }), /variant revision/);
 });
 
 test('profiles validate and round trip through palette edits, reduction, and JSON transfer', () => {
