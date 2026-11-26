@@ -1,6 +1,6 @@
 # Architecture
 
-Source files live in `src/guanchillo/`. The build compiles TypeScript to JavaScript and copies the HTML, CSS and icon into `dist/`. Relative imports in TypeScript use the emitted `.js` extension so browsers can load them directly.
+Source files live in `src/guanchillo/`. The build clears the generated `dist/` directory, compiles TypeScript to JavaScript and copies the static resources and indexed patterns. Relative imports in TypeScript use the emitted `.js` extension so browsers can load them directly.
 
 | Module | Responsibility |
 | --- | --- |
@@ -10,11 +10,14 @@ Source files live in `src/guanchillo/`. The build compiles TypeScript to JavaScr
 | [views/crochet](../../src/guanchillo/views/crochet) | Desktop chart tracking, mobile stitch strip, click and key routing, and crochet settings |
 | [views/editor](../../src/guanchillo/views/editor) | Editor state and gestures, palette, pattern creation, and image import |
 | [views/catalog](../../src/guanchillo/views/catalog) | Template cards, previews and filters |
+| [views/library](../../src/guanchillo/views/library) | Local project search, progress summaries, and edit, resume and export actions |
 | [views/shared](../../src/guanchillo/views/shared) | Canvas grid, sphere and flat previews, DOM helpers and compact layout breakpoint |
 
-The editor and desktop crochet view share a canvas grid. A separate progress canvas marks completed stitches. Sphere charts center each round across six gores and allow half-stitch shifts so even and odd widths stay centered. Painting updates the affected pixels during a drag.
+The editor and desktop crochet view share a canvas grid. A separate progress canvas marks completed stitches. Sphere charts center each round across six gores and allow half-stitch shifts so even and odd widths stay centered. Painting updates the affected pixels during a drag. A completed drag creates one undo entry. A canceled gesture restores the previous cells or reference position.
 
-At widths up to 650 CSS pixels, the crochet view draws a strip of up to eight stitches and keeps its guidance in a live region. Both views consume the same current stitch, color cue and progress. The input controller routes background clicks, touch taps and keys in Crochet mode and leaves controls and dialogs to their normal event handling. The desktop chart uses primary clicks to jump to a stitch.
+At widths up to 650 CSS pixels, the crochet view draws a strip of up to eight stitches and keeps its guidance in a live region. Both views consume the same current stitch, color cue and progress. The input controller routes background clicks, touch taps and keys in Crochet mode and leaves controls and dialogs to their normal event handling. The desktop chart uses primary clicks to jump to a stitch. The settings dialog also accepts row or round and stitch coordinates on the existing route. Its numbering follows the working direction.
+
+The optional screen wake lock is requested while Crochet is visible and its route is unfinished. The browser can decline or revoke the request. Leaving Crochet, hiding the page or completing the route releases the lock. [W3C Screen Wake Lock API](https://www.w3.org/TR/screen-wake-lock/)
 
 ## JSON format, version 1
 
@@ -66,7 +69,7 @@ Shaping starts with six stitches in a magic ring, increases by six per shaping r
 
 ## Templates and image conversion
 
-[patterns/index.json](../../patterns/index.json) lists the published template filenames without their extensions in a `patterns` array. Each file stores one version 1 master chart with up to eight colors and explicit `shape` and `tags` metadata. Catalog builds both filter lists from that metadata. Sphere masters use 63 rounds and flat masters use up to 64 stitches along their longest side. The `recommended` field holds the default size, which may equal the master size. Give a chart a familiar theme tag only when it helps people find related patterns. Add another tag only when it supports a distinct search. Catalog shape is already a separate filter.
+[patterns/index.json](../../patterns/index.json) lists the published template filenames without their extensions in a `patterns` array. Each file stores one version 1 master chart with up to eight colors and explicit `shape` and `tags` metadata. Catalog builds both filter lists from that metadata and combines them with the name search. An intersection observer defers drawing previews until cards approach the viewport. Selecting a card action can resolve its variant independently of preview drawing. Sphere masters use 63 rounds and flat masters use up to 64 stitches along their longest side. The `recommended` field holds the default size, which may equal the master size. Give a chart a familiar theme tag only when it helps people find related patterns. Add another tag only when it supports a distinct search. Catalog shape is already a separate filter.
 
 Catalog and New pattern derive each chart from its master. An exact color profile is applied before sampling. Smaller spheres choose the color with the greatest covered area across adjacent source rounds and stitches. Flat charts use nearest-neighbor sampling. When a profile is unavailable, similar colors are merged according to their stitch counts and color distance. Catalog keeps separate local records by dimensions and requested color count. Profiled variants have separate IDs so older saved copies can still be opened from the library. The build copies the indexed JSON files into `dist/patterns/`.
 
@@ -82,7 +85,7 @@ Design can also display the image beneath the color canvas as a local reference.
 | --- | --- |
 | `guanchillo:v1:pattern:<id>` | Pattern and ID |
 | `guanchillo:v1:progress:<id>` | Current stitch path and completed count |
-| `guanchillo:v1:preferences` | Active pattern and view. Legacy `collection` preferences open Catalog |
+| `guanchillo:v1:preferences` | Active pattern, view and optional screen wake preference. Legacy `collection` preferences open Catalog |
 | `guanchillo:v1:crochet-controls` | Optional browser-wide key and mouse bindings for next and previous stitch |
 
 Editor actions save after they finish. Crochet steps update the progress record as they happen. Resizing preserves the bottom-left corner of a flat grid and resamples spherical colors. Flat design scaling resamples the content and sets the new grid dimensions. Dimension changes reset the stitch path. Reads can fall back to keys created before the brand rename, and writes use the current prefix. Storage failures leave the working copy in memory and display an alert. When two tabs update the same record, the last write wins.

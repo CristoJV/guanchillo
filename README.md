@@ -29,5 +29,6 @@ An `.mjs` file is a JavaScript ES module. It uses standard `import` and `export`
 | Static hosting | [Deployment](docs/technical/deployment.md) |
 | MVP scope | [Plan 001](docs/plans/001-mvp.md) |
 | Portrait mobile layout and hands-free controls | [Plan 002](docs/plans/002-mobile-portrait.md) |
+| Project continuity, search and catalog previews | [Plan 003](docs/plans/003-continuity-and-discovery.md) |
 | Implemented architecture decisions | [ADR 001](docs/adrs/001-static-architecture.md) |
 | Image import decisions and proposals | [RFC 001](docs/rfcs/001-import-image.md) |

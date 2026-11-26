@@ -1,6 +1,7 @@
 import { crochetStep } from './core/crochet.js';
 import { deserializePattern, examplePattern, hasStarted, jumpToStitch, limits, makeColorGuide, newPattern, newProgress,
   serializePattern, totalSteps, type Pattern, type Progress } from './core/model.js';
+import { makeScreenWakeLock } from './platform/screen-wake-lock.js';
 import { createStorage, type Mode } from './platform/storage.js';
 import { makeCatalog } from './views/catalog/catalog.js';
 import { makeDesktopCrochet } from './views/crochet/desktop.js';
@@ -10,6 +11,7 @@ import { bindCrochetSettings } from './views/crochet/settings.js';
 import { makeEditor } from './views/editor/editor.js';
 import { makeImageImporter } from './views/editor/image-import.js';
 import { bindNewPattern } from './views/editor/new-pattern.js';
+import { makeLibrary } from './views/library/library.js';
 import { byId, setText, status } from './views/shared/dom.js';
 import { makeGrid } from './views/shared/grid.js';
 import { compactLayout } from './views/shared/layout.js';
@@ -39,6 +41,9 @@ let pattern: Pattern;
 let progress: Progress;
 let colorGuide: ReturnType<typeof makeColorGuide>;
 let mode: Mode = preferences?.mode ?? 'edit';
+let keepAwake = preferences?.keepAwake ?? false;
+const screenWakeLock = makeScreenWakeLock(state => setText('screen-wake-status', state === 'active' ?
+  'Screen is staying awake.' : state === 'unavailable' ? 'This device could not keep the screen awake.' : ''));
 
 const editor = makeEditor({ viewport, surface, workspace, grid, savePattern, replacePattern });
 const desktop = makeDesktopCrochet(grid, surface, move);
@@ -63,6 +68,17 @@ bindCrochetSettings({
     grid.drawPattern(pattern, progress.direction, false);
     refreshTracking();
   },
+  applyStitch(next) {
+    if (next === progress) return;
+    updateProgress(next);
+    prepareCrochetView();
+  },
+  getKeepAwake: () => keepAwake,
+  setKeepAwake(next) {
+    keepAwake = next;
+    savePreferences();
+    syncScreenWakeLock();
+  },
   getControls: () => controls,
   saveControls(next) {
     controls = next;
@@ -71,6 +87,20 @@ bindCrochetSettings({
   focus: focusCrochet,
 });
 bindNewPattern(fresh => selectPattern(fresh, 'edit', newProgress(fresh)));
+
+const library = makeLibrary({
+  patterns: () => patterns.values(),
+  progress: entry => sessions.get(entry.id) ?? storage.progress(entry),
+  currentId: () => pattern.id,
+  open(entry, action) {
+    if (entry.id === pattern.id) setMode(action);
+    else selectPattern(entry, action);
+    if (action === 'work') focusCrochet();
+    else surface.focus({ preventScroll: true });
+  },
+  exportPattern,
+  remove: removeFromLibrary,
+});
 
 const catalog = makeCatalog((template, action) => {
   const existing = patterns.get(template.id);
@@ -106,7 +136,7 @@ compact.addEventListener('change', () => {
 });
 
 function savePreferences() {
-  storage.savePreferences({ activeId: pattern.id, mode });
+  storage.savePreferences({ activeId: pattern.id, mode, keepAwake });
 }
 
 function savePattern() {
@@ -164,7 +194,10 @@ function setMode(nextMode: Mode) {
   byId('stitch-legend').hidden = !working;
 
   if (changed && pattern.shape === 'sphere') grid.drawPattern(pattern, progress.direction, mode === 'edit');
-  if (!working) grid.hideProgress();
+  if (!working) {
+    grid.hideProgress();
+    syncScreenWakeLock();
+  }
   editor.setActive(mode === 'edit', progress);
 
   setText('mode-title', browsing ? 'Pattern catalog' : working ? 'Follow pattern' : 'Pattern editor');
@@ -192,6 +225,11 @@ function renderProgress() {
   const step = crochetStep(pattern, progress, colorGuide);
   if (compact.matches) mobile.render(pattern, progress, step);
   else desktop.render(step);
+  syncScreenWakeLock();
+}
+
+function syncScreenWakeLock() {
+  screenWakeLock.setEnabled(keepAwake && mode === 'work' && progress.offset < totalSteps(pattern, progress));
 }
 
 function saveProgress() {
@@ -219,54 +257,23 @@ function move(amount: -1 | 1) {
   renderProgress();
 }
 
-function renderLibrary() {
-  const list = byId('library-list');
-  list.replaceChildren();
-  for (const entry of [...patterns.values()].sort((a, b) => a.name.localeCompare(b.name, 'es'))) {
-    const item = document.createElement('li');
-    const open = document.createElement('button');
-    open.className = 'button outline';
-    open.type = 'button';
-    const name = document.createElement('span');
-    name.textContent = entry.name;
-    const size = document.createElement('small');
-    const dimensions = entry.shape === 'sphere' ? entry.rows + ' rounds' : entry.rows + ' × ' + entry.cols;
-    size.textContent = dimensions + ' · ' + entry.palette.length + (entry.palette.length === 1 ? ' color' : ' colors');
-    open.append(name, size);
-    if (entry.id === pattern.id) open.setAttribute('aria-current', 'true');
-    open.addEventListener('click', () => {
-      byId('library-dialog', 'dialog').close();
-      if (entry.id !== pattern.id || mode === 'catalog') selectPattern(entry, mode === 'work' ? 'work' : 'edit');
-      if (mode === 'work') focusCrochet();
-    });
-    const remove = document.createElement('button');
-    remove.className = 'icon-button danger';
-    remove.type = 'button';
-    remove.setAttribute('aria-label', 'Delete pattern ' + entry.name);
-    remove.innerHTML = '<svg class="icon" aria-hidden="true"><use href="#trash"></use></svg>';
-    remove.addEventListener('click', () => {
-      if (!window.confirm('Delete “' + entry.name + '” and its progress from this browser?')) return;
-      if (!storage.removePattern(entry.id)) return;
-      patterns.delete(entry.id);
-      sessions.delete(entry.id);
-      unsaved.delete(entry.id);
-      editor.removeReference(entry.id);
-      if (entry.id === pattern.id) {
-        const remaining = patterns.values().next().value;
-        if (remaining) {
-          selectPattern(remaining, mode);
-        } else {
-          const blank = newPattern();
-          selectPattern(blank, mode, newProgress(blank));
-        }
-      }
-      renderLibrary();
-      (list.querySelector<HTMLButtonElement>('button[aria-current]') ?? byId('library-import')).focus();
-      status('Pattern deleted.');
-    });
-    item.append(open, remove);
-    list.append(item);
+function removeFromLibrary(entry: Pattern) {
+  if (!window.confirm('Delete “' + entry.name + '” and its progress from this browser?')) return false;
+  if (!storage.removePattern(entry.id)) return false;
+  patterns.delete(entry.id);
+  sessions.delete(entry.id);
+  unsaved.delete(entry.id);
+  editor.removeReference(entry.id);
+  if (entry.id === pattern.id) {
+    const remaining = patterns.values().next().value;
+    if (remaining) selectPattern(remaining, mode);
+    else {
+      const blank = newPattern();
+      selectPattern(blank, mode, newProgress(blank));
+    }
   }
+  status('Pattern deleted.');
+  return true;
 }
 
 async function importFile(file: File | undefined) {
@@ -279,21 +286,25 @@ async function importFile(file: File | undefined) {
   status('Opened “' + imported.pattern.name + '”.');
 }
 
-function exportPattern() {
-  const contents = new Blob([serializePattern(pattern, progress)], { type: 'application/json' });
-  const url = URL.createObjectURL(contents);
-  const link = document.createElement('a');
-  const slug = pattern.name.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  link.href = url;
-  link.download = (slug || 'pattern') + '.guanchillo.json';
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 3000);
-  status('Pattern and progress exported as JSON.');
+function exportPattern(entry: Pattern, route: Progress) {
+  try {
+    const contents = new Blob([serializePattern(entry, route)], { type: 'application/json' });
+    const url = URL.createObjectURL(contents);
+    const link = document.createElement('a');
+    const slug = entry.name.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    link.href = url;
+    link.download = (slug || 'pattern') + '.guanchillo.json';
+    link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+    status('Pattern and progress exported as JSON.');
+  } catch (error) {
+    window.alert(error instanceof Error ? error.message : 'Could not export the pattern.');
+  }
 }
 
 byId('library-open').addEventListener('click', () => {
-  renderLibrary();
-  byId('library-dialog', 'dialog').showModal();
+  editor.finishGesture();
+  library.show();
 });
 byId('edit-mode').addEventListener('click', () => setMode('edit'));
 byId('catalog-mode').addEventListener('click', () => setMode('catalog'));
@@ -305,13 +316,7 @@ byId('work-mode').addEventListener('click', () => {
 byId('save-pattern').addEventListener('click', () => {
   if (savePattern()) status('Saved “' + pattern.name + '” in this browser.');
 });
-byId('export-pattern').addEventListener('click', () => {
-  try {
-    exportPattern();
-  } catch (error) {
-    window.alert(error instanceof Error ? error.message : 'Could not export the pattern.');
-  }
-});
+byId('export-pattern').addEventListener('click', () => exportPattern(pattern, progress));
 
 for (const button of document.querySelectorAll<HTMLButtonElement>('button[data-close]')) {
   const id = button.dataset.close;

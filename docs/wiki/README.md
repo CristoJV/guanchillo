@@ -4,7 +4,7 @@
 
 1. Select **New pattern**, give it a name and set the dimensions. You can also try the **Lava Diamond** example.
 2. Choose a color and use the **Pencil** to click or drag on the grid. The **Eraser** leaves stitches unassigned.
-3. Use **Undo** or **Redo** to revise your work. Each drag counts as one action.
+3. Use **Undo** or **Redo** to revise your work. Each finished drag counts as one action. Press **Escape** during a drag to cancel it.
 4. Choose **Apply size** to resize. A flat grid grows with empty squares along the top and right edges. If you have started crocheting, Guanchillo asks before resetting your progress.
 5. For a flat pattern, choose **Scale design** to multiply or divide the drawing and its grid by a whole-number factor. Use the chain to switch between one shared factor and separate horizontal and vertical factors. The size fields update when you apply the scale.
 6. Use **Add color** to extend the palette, or use the pencil next to a color to edit or remove it. When removing a color in use, choose **Fill with closest color** or **Leave unassigned** for its stitches.
@@ -23,12 +23,12 @@ Zoom in to work on details. Select **Pan** and drag to move around. **Fit to vie
 
 1. Open **Import image**, choose an image and select **Use as reference**. It appears beneath the squares of the current pattern. Painted squares remain translucent while the reference is visible.
 2. For a flat pattern, enter the maximum **Rows** and **Columns** you want and choose **Fit grid to image**. This fits the image proportions within those dimensions and centers the reference. The usual resize rules apply to existing stitches and progress.
-3. Select **Move image** and drag on the grid, or press the arrow keys to move the image one square at a time. **Center image** restores the starting position. Switch to **Pencil** or **Eraser** to edit squares.
+3. Select **Move image** and drag on the grid, or press the arrow keys to move the image one square at a time. **Center image** centers the reference. Press **Escape** during a drag to restore its previous position. Switch to **Pencil** or **Eraser** to edit squares.
 4. Toggle **Show reference** to check the chart colors, or choose **Remove image** to clear the layer. Each reference stays with its pattern while the page is open.
 
 ## Browse the pattern catalog
 
-Open **Catalog** and use **Tag** and **Type** together to find charts. You can also select a tag on a card to apply it. Pick **Recommended** for the suggested size or **High** for the master size when both are available. Use **Colors** to choose how many yarns to use, up to the number available in the master. The preview updates before you choose **Edit** or **Crochet**. Returning with the same settings reopens the local copy, including its progress.
+Open **Catalog** and use **Search by name**, **Tag** and **Type** together to find charts. Search matches words in any order and accepts names typed without accents. Select **Clear filters** to see every pattern again. You can also select a tag on a card to apply it. Pick **Recommended** for the suggested size or **High** for the master size when both are available. Use **Colors** to choose how many yarns to use, up to the number available in the master. The preview draws as you approach the card and updates when you change the colors or resolution. Returning with the same settings reopens the local copy, including its progress.
 
 Choose **Canarias** for the island outlines and other Canarian designs. Choose **Minecraft** for the seven 8 × 8 charts. Select **Source** on a card to see its attribution when available. On a phone, cards appear one per row.
 
@@ -48,7 +48,9 @@ When following a sphere, crochet in a continuous spiral. The current stitch disp
 
 ## Save or transfer your work
 
-Changes save in this browser as you work. **Save** confirms the current copy, and **My patterns** opens the library. **Export pattern** downloads a JSON file containing the design, palette and crochet progress. **Import** opens it as a new copy and restores the progress included in the file. On narrow screens, use **Import JSON** inside **My patterns**.
+Changes save in this browser as you work. Search **My patterns** by name and use the stitch count to find a project in progress. Choose **Resume** to return to its next stitch or **Edit** to open the design.
+
+Use a project’s export button in **My patterns**, or **Export pattern** in Design, to download its chart, palette and progress as JSON. **Import** opens it as a new copy and restores the saved progress. On narrow screens, use **Import JSON** inside **My patterns**.
 
 ## Crochet
 
@@ -56,7 +58,8 @@ Changes save in this browser as you work. **Save** confirms the current copy, an
 2. Select **Start**. The instructions show how many full stitches to make in the current yarn and when to close a stitch with the next color. Same-color counts continue across rows and rounds.
 3. After each stitch, tap the work area, choose **Next**, or press **Space**. **Back** or the Left arrow returns one stitch. Navigation, settings and other controls use their own actions.
 4. On a phone, the strip shows up to eight stitches from the current row or round and moves with you. On desktop, you can click a stitch in the full chart to jump to it. The stitches before it along your path are marked complete. If you click before the configured starting point, the selected stitch becomes the new start.
-5. Reopen the pattern in the same browser to resume. To move progress to another browser, export the pattern as JSON and import it there.
+5. Open **Settings → Go to stitch** to correct several stitches at once. Enter the row or round and stitch number as shown in Crochet. The starting point and direction stay in place.
+6. Turn on **Keep screen awake while crocheting** in Settings if you want the display to stay on with Crochet visible and stitches pending. Settings shows whether the browser granted the request.
 
 ### Use a mouse or keyboard as a foot control
 

@@ -6,6 +6,7 @@ export type Mode = 'edit' | 'work' | 'catalog';
 interface Preferences {
   activeId: string;
   mode: Mode;
+  keepAwake?: boolean;
 }
 
 const prefix = 'guanchillo:v1:';
@@ -70,7 +71,8 @@ export function createStorage(onError: (message: string) => void) {
       if (typeof value !== 'object' || !value || !('activeId' in value) || !('mode' in value)) return null;
       const { activeId } = value;
       const mode = value.mode === 'collection' ? 'catalog' : value.mode;
-      return typeof activeId === 'string' && (mode === 'edit' || mode === 'work' || mode === 'catalog') ? { activeId, mode } : null;
+      return typeof activeId === 'string' && (mode === 'edit' || mode === 'work' || mode === 'catalog') ?
+        { activeId, mode, keepAwake: 'keepAwake' in value && value.keepAwake === true } : null;
     },
     savePreferences: (preferences: Preferences) => write(preferencesKey, preferences),
     crochetControls: () => parseCrochetControls(read(controlsKey)),

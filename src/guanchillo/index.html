@@ -231,6 +231,10 @@
     <section id="catalog-view" aria-label="Pattern catalog" hidden>
       <div class="catalog-toolbar">
         <div class="catalog-filters" role="group" aria-label="Catalog filters">
+          <div class="catalog-search-field">
+            <label for="catalog-search">Search by name</label>
+            <input id="catalog-search" type="search">
+          </div>
           <div>
             <label for="catalog-tag">Tag</label>
             <select id="catalog-tag" disabled><option value="">All tags</option></select>
@@ -241,12 +245,13 @@
           </div>
         </div>
         <p id="catalog-status" role="status"></p>
+        <button class="button subtle" id="catalog-reset" type="button" hidden>Clear filters</button>
         <button class="button outline" id="catalog-retry" type="button" hidden>Reload templates</button>
       </div>
       <div id="catalog-gallery" class="catalog-gallery"></div>
       <template id="catalog-card-template">
         <article class="panel template-card">
-          <div class="template-preview"><div class="template-motif"><canvas role="img"></canvas></div></div>
+          <div class="template-preview"><div class="template-motif"><canvas role="img" aria-hidden="true"></canvas></div></div>
           <div class="template-details">
             <h2></h2>
             <p></p>
@@ -340,7 +345,23 @@
 
   <dialog id="library-dialog" aria-labelledby="library-title">
     <div class="dialog-heading"><h2 id="library-title">My patterns</h2><button type="button" class="icon-button" data-close="library-dialog" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
+    <label>Search by name <input id="library-search" type="search" autofocus></label>
+    <p id="library-status" role="status"></p>
     <ul id="library-list" class="library-list"></ul>
+    <template id="library-item-template">
+      <li>
+        <div class="library-description">
+          <h3></h3>
+          <p><span class="library-size"></span> · <span class="library-progress"></span></p>
+        </div>
+        <div class="library-actions">
+          <button class="button primary" type="button" data-library-work></button>
+          <button class="button outline" type="button" data-library-edit>Edit</button>
+          <button class="icon-button outline" type="button" data-library-export><svg class="icon"><use href="#export"></use></svg></button>
+          <button class="icon-button danger" type="button" data-library-delete><svg class="icon"><use href="#trash"></use></svg></button>
+        </div>
+      </li>
+    </template>
     <div class="dialog-actions"><button class="button outline" id="library-import" type="button"><svg class="icon"><use href="#import"></use></svg> Import JSON</button></div>
   </dialog>
 
@@ -389,6 +410,22 @@
 
   <dialog id="progress-dialog" aria-labelledby="progress-title">
     <div class="dialog-heading"><h2 id="progress-title">Crochet settings</h2><button type="button" class="icon-button" id="progress-close" aria-label="Close"><svg class="icon"><use href="#close"></use></svg></button></div>
+    <div class="screen-setting">
+      <label class="check-field"><input id="keep-screen-awake" type="checkbox" aria-describedby="screen-wake-status"> Keep screen awake while crocheting</label>
+      <p id="screen-wake-status" role="status"></p>
+    </div>
+    <details class="stitch-seek" id="seek-section">
+      <summary>Go to stitch</summary>
+      <form id="seek-form">
+        <p>Choose the next stitch as numbered in your working direction.</p>
+        <div class="field-grid">
+          <label><span id="seek-row-label">Row</span><input id="seek-row" type="number" required></label>
+          <label>Stitch number <input id="seek-point" type="number" required></label>
+        </div>
+        <p id="seek-error" role="status"></p>
+        <button class="button outline" type="submit">Go to stitch</button>
+      </form>
+    </details>
     <form id="progress-form">
       <h3>Starting point</h3>
       <p id="progress-origin-help">Count rows from the bottom and columns from the left.</p>

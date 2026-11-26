@@ -1,3 +1,4 @@
+import { matchPatternName } from '../../core/search.js';
 import { counts, type Pattern } from '../../core/model.js';
 import { deriveTemplate, type PatternTemplate } from '../../core/templates.js';
 import { getTemplates } from '../../platform/templates.js';
@@ -16,18 +17,33 @@ export function makeCatalog(open: (entry: Pattern, action: Action) => void) {
   const gallery = byId('catalog-gallery');
   const status = byId('catalog-status');
   const retry = byId('catalog-retry', 'button');
+  const reset = byId('catalog-reset', 'button');
+  const search = byId('catalog-search', 'input');
   const cardTemplate = byId('catalog-card-template', 'template');
   const tagFilter = byId('catalog-tag', 'select');
   const shapeFilter = byId('catalog-shape', 'select');
   const cards: { element: HTMLElement; pattern: Pattern }[] = [];
   let loaded = false;
   let loading = false;
+  const previews = new Map<Element, () => void>();
+  const observer = typeof IntersectionObserver === 'function' ? new IntersectionObserver(entries => {
+    for (const { target, isIntersecting } of entries) {
+      if (!isIntersecting) continue;
+      observer?.unobserve(target);
+      const draw = previews.get(target);
+      previews.delete(target);
+      draw?.();
+    }
+  }, { rootMargin: '160px' }) : undefined;
 
   function showFilter() {
+    if (!loaded) return;
+    const matches = matchPatternName(search.value);
+    reset.hidden = !search.value.trim() && !tagFilter.value && !shapeFilter.value;
     let shown = 0;
     for (const card of cards) {
-      const { shape, tags } = card.pattern;
-      card.element.hidden = (tagFilter.value !== '' && !tags.includes(tagFilter.value)) ||
+      const { name, shape, tags } = card.pattern;
+      card.element.hidden = !matches(name) || (tagFilter.value !== '' && !tags.includes(tagFilter.value)) ||
         (shapeFilter.value !== '' && shape !== shapeFilter.value);
       if (!card.element.hidden) shown++;
     }
@@ -72,43 +88,65 @@ export function makeCatalog(open: (entry: Pattern, action: Action) => void) {
     colors.closest('label')!.hidden = pattern.palette.length < 2;
     resolution.closest('label')!.hidden = pattern.rows === recommended.rows && pattern.cols === recommended.cols;
     setColorChoices(colors, template);
-    let selected: Pattern;
+    let selected: Pattern | undefined;
+    let draw: ((entry: Pattern) => void) | undefined;
+    const size = () => resolution.value === 'high' ? pattern : recommended;
+    const budget = () => Number(colors.value);
+    const selection = () => selected ??= deriveTemplate(template, size(), budget());
+
     edit.setAttribute('aria-label', 'Edit ' + pattern.name);
     crochet.setAttribute('aria-label', 'Crochet ' + pattern.name);
-    edit.addEventListener('click', () => open(selected, 'edit'));
-    crochet.addEventListener('click', () => open(selected, 'work'));
+    edit.addEventListener('click', () => open(selection(), 'edit'));
+    crochet.addEventListener('click', () => open(selection(), 'work'));
 
-    let render: (entry: Pattern) => void;
-    if (pattern.shape === 'sphere') {
-      canvas.width = canvas.height = 160;
-      canvas.tabIndex = 0;
-      canvas.setAttribute('aria-label', '3D preview of ' + pattern.name + '. Use arrow keys to rotate.');
-      render = makeGlobe(canvas).show;
-    } else {
+    function makePreview() {
+      canvas.removeAttribute('aria-hidden');
+      if (pattern.shape === 'sphere') {
+        canvas.width = canvas.height = 160;
+        canvas.tabIndex = 0;
+        canvas.setAttribute('aria-label', '3D preview of ' + pattern.name + '. Use arrow keys to rotate.');
+        return makeGlobe(canvas).show;
+      }
       canvas.setAttribute('aria-label', 'Flat chart of ' + pattern.name);
-      render = entry => {
+      return (entry: Pattern) => {
         const longSide = Math.max(entry.rows, entry.cols);
         canvas.style.width = (entry.cols / longSide * 100) + '%';
         canvas.style.height = (entry.rows / longSide * 100) + '%';
         drawFlatPreview(canvas, entry);
       };
     }
+
     function updatePreview() {
-      const size = resolution.value === 'high' ? pattern : recommended;
-      const budget = Number(colors.value);
-      selected = deriveTemplate(template, size, budget);
-      const shapeSummary = selected.shape === 'sphere' ? selected.rows + ' rounds · 3D' :
-        selected.cols + ' × ' + selected.rows + ' stitches';
-      const used = counts(selected).colors.filter(count => count > 0).length;
-      summary.textContent = shapeSummary + (used < budget ? ' · ' + used + ' colors used' : '');
-      if (selected.shape === 'sphere') {
-        article.style.setProperty('--globe-size', Math.min(100, 35 + 65 * selected.rows / largestSphere) + '%');
+      const { rows, cols } = size();
+      const description = pattern.shape === 'sphere' ? rows + ' rounds · 3D' : cols + ' × ' + rows + ' stitches';
+      if (!draw) {
+        summary.textContent = description;
+        return;
       }
-      render(selected);
+      const entry = selection();
+      const used = counts(entry).colors.filter(count => count > 0).length;
+      summary.textContent = description + (used < budget() ? ' · ' + used + ' colors used' : '');
+      if (entry.shape === 'sphere') {
+        article.style.setProperty('--globe-size', Math.min(100, 35 + 65 * rows / largestSphere) + '%');
+      }
+      draw(entry);
     }
-    colors.addEventListener('change', updatePreview);
-    resolution.addEventListener('change', updatePreview);
-    updatePreview();
+
+    function changed() {
+      selected = undefined;
+      updatePreview();
+    }
+    colors.addEventListener('change', changed);
+    resolution.addEventListener('change', changed);
+    const showPreview = () => {
+      draw = makePreview();
+      updatePreview();
+    };
+    if (observer) {
+      updatePreview();
+      previews.set(article, showPreview);
+      observer.observe(article);
+    } else showPreview();
     return { element: article, pattern };
   }
 
@@ -140,6 +178,12 @@ export function makeCatalog(open: (entry: Pattern, action: Action) => void) {
     }
   }
 
+  search.addEventListener('input', showFilter);
+  reset.addEventListener('click', () => {
+    search.value = tagFilter.value = shapeFilter.value = '';
+    showFilter();
+    search.focus();
+  });
   tagFilter.addEventListener('change', showFilter);
   shapeFilter.addEventListener('change', showFilter);
   retry.addEventListener('click', show);

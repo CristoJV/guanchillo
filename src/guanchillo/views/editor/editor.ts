@@ -232,6 +232,26 @@ export function makeEditor({ viewport, surface, workspace, grid, savePattern, re
     refreshCursor();
   }
 
+  function cancelGesture() {
+    const canceled = gesture;
+    if (!canceled) return;
+    gesture = null;
+    workspace.classList.remove('is-panning');
+    if (viewport.hasPointerCapture(canceled.id)) viewport.releasePointerCapture(canceled.id);
+    if (canceled.type === 'stroke' && canceled.before) {
+      pattern.cells = canceled.before.cells;
+      grid.drawPattern(pattern, progress.direction, true);
+      updateGlobe();
+      palette.updateCounts();
+    } else if (canceled.type === 'reference') {
+      moveReference(canceled.layer, canceled.start.x, canceled.start.y);
+    } else if (canceled.type === 'pan') {
+      viewport.scrollLeft = canceled.left;
+      viewport.scrollTop = canceled.top;
+    }
+    refreshCursor();
+  }
+
   viewport.addEventListener('pointerdown', event => {
     if (!active || event.button !== 0 || !event.isPrimary || gesture) return;
     if (tool === 'pan') {
@@ -287,13 +307,16 @@ export function makeEditor({ viewport, surface, workspace, grid, savePattern, re
     }
   });
 
-  for (const name of ['pointerup', 'pointercancel', 'lostpointercapture'] as const) {
+  viewport.addEventListener('pointerup', event => {
+    if (gesture?.id === event.pointerId) finishGesture();
+  });
+  for (const name of ['pointercancel', 'lostpointercapture'] as const) {
     viewport.addEventListener(name, event => {
-      if (gesture?.id === event.pointerId) finishGesture();
+      if (gesture?.id === event.pointerId) cancelGesture();
     });
   }
 
-  window.addEventListener('pagehide', finishGesture);
+  window.addEventListener('pagehide', cancelGesture);
   surface.addEventListener('focus', refreshCursor);
   surface.addEventListener('blur', refreshCursor);
   const arrows = new Map([['ArrowLeft', [-1, 0]], ['ArrowRight', [1, 0]], ['ArrowUp', [0, -1]], ['ArrowDown', [0, 1]]]);
@@ -303,6 +326,12 @@ export function makeEditor({ viewport, surface, workspace, grid, savePattern, re
     const target = event.target;
     if (!active || event.defaultPrevented || event.isComposing || document.querySelector('dialog[open]') ||
       !(target instanceof Element) || target.closest('input, select, textarea, [contenteditable]')) return;
+
+    if (event.key === 'Escape' && gesture) {
+      event.preventDefault();
+      cancelGesture();
+      return;
+    }
 
     if ((event.ctrlKey || event.metaKey) && !event.altKey && ['z', 'y'].includes(event.key.toLowerCase())) {
       event.preventDefault();

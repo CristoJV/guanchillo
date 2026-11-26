@@ -1,6 +1,6 @@
 import { actionFor, bindingLabel, isMouseButton, keyBinding, sameBinding, type Binding, type CrochetAction, type CrochetControls }
   from '../../core/crochet-controls.js';
-import { chartRow, hasStarted, newProgress, type Pattern, type Progress } from '../../core/model.js';
+import { chartRow, hasStarted, newProgress, seekStitch, tileAt, totalSteps, type Pattern, type Progress } from '../../core/model.js';
 import { byId, setText } from '../shared/dom.js';
 
 const actions = ['advance', 'back'] as const;
@@ -16,18 +16,24 @@ interface SettingsOptions {
   getPattern: () => Pattern;
   getProgress: () => Progress;
   applyStart: (progress: Progress) => void;
+  applyStitch: (progress: Progress) => void;
+  getKeepAwake: () => boolean;
+  setKeepAwake: (enabled: boolean) => void;
   getControls: () => CrochetControls;
   saveControls: (controls: CrochetControls) => void;
   focus: () => void;
 }
 
-export function bindCrochetSettings({ getPattern, getProgress, applyStart, getControls, saveControls, focus }: SettingsOptions) {
+export function bindCrochetSettings({ getPattern, getProgress, applyStart, applyStitch, getKeepAwake, setKeepAwake, getControls, saveControls, focus }: SettingsOptions) {
   const dialog = byId('progress-dialog', 'dialog');
   const startRow = byId('start-row', 'input');
   const startCol = byId('start-col', 'input');
   const direction = byId('start-direction', 'select');
   const alternate = byId('start-alternate', 'input');
   const capture = byId('capture-dialog', 'dialog');
+  const keepAwake = byId('keep-screen-awake', 'input');
+  const seekRow = byId('seek-row', 'input');
+  const seekPoint = byId('seek-point', 'input');
   let selected: CrochetAction = 'advance';
 
   function updateStartLimit() {
@@ -37,6 +43,30 @@ export function bindCrochetSettings({ getPattern, getProgress, applyStart, getCo
     const { stitches } = chartRow(pattern, pattern.rows - row);
     startCol.max = String(stitches);
     if (startCol.valueAsNumber > stitches) startCol.valueAsNumber = stitches;
+  }
+
+  function updateSeekLimits() {
+    const pattern = getPattern();
+    const progress = getProgress();
+    const row = seekRow.valueAsNumber;
+    setText('seek-error', '');
+    if (!seekRow.validity.valid) return;
+    const { stitches } = chartRow(pattern, pattern.rows - row);
+    const min = row === progress.row ? tileAt(pattern, progress, 0)!.point : 1;
+    seekPoint.min = String(min);
+    seekPoint.max = String(stitches);
+    seekPoint.valueAsNumber = Math.min(stitches, Math.max(min, seekPoint.valueAsNumber || min));
+  }
+
+  function populateSeek(pattern: Pattern, progress: Progress) {
+    byId('seek-section', 'details').open = false;
+    setText('seek-row-label', pattern.shape === 'sphere' ? 'Round' : 'Row');
+    const tile = tileAt(pattern, progress, Math.min(progress.offset, totalSteps(pattern, progress) - 1))!;
+    seekRow.min = String(progress.row);
+    seekRow.max = String(pattern.rows);
+    seekRow.valueAsNumber = tile.row;
+    seekPoint.valueAsNumber = tile.point;
+    updateSeekLimits();
   }
 
   function renderControls() {
@@ -65,6 +95,8 @@ export function bindCrochetSettings({ getPattern, getProgress, applyStart, getCo
     direction.value = progress.direction;
     alternate.checked = progress.alternate;
     byId('progress-reset-note').hidden = !hasStarted(progress);
+    keepAwake.checked = getKeepAwake();
+    populateSeek(pattern, progress);
     renderControls();
     dialog.showModal();
   }
@@ -77,6 +109,19 @@ export function bindCrochetSettings({ getPattern, getProgress, applyStart, getCo
   byId('progress-close').addEventListener('click', close);
   dialog.addEventListener('cancel', event => {
     event.preventDefault();
+    close();
+  });
+  keepAwake.addEventListener('change', () => setKeepAwake(keepAwake.checked));
+  seekRow.addEventListener('input', updateSeekLimits);
+  seekPoint.addEventListener('input', () => setText('seek-error', ''));
+  byId('seek-form', 'form').addEventListener('submit', event => {
+    event.preventDefault();
+    const next = seekStitch(getPattern(), getProgress(), seekRow.valueAsNumber, seekPoint.valueAsNumber);
+    if (!next) {
+      setText('seek-error', 'Choose a stitch on your current path.');
+      return;
+    }
+    applyStitch(next);
     close();
   });
   startRow.addEventListener('input', updateStartLimit);

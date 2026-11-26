@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { crochetStep, stitchWindow } from '../dist/core/crochet.js';
 import { actionFor, keyBinding, parseCrochetControls } from '../dist/core/crochet-controls.js';
-import { makeColorGuide, newPattern, newProgress, newSphere } from '../dist/core/model.js';
+import { matchPatternName } from '../dist/core/search.js';
+import { makeColorGuide, newPattern, newProgress, newSphere, seekStitch, tileAt } from '../dist/core/model.js';
 
 function readStep(pattern, progress) {
   const step = crochetStep(pattern, progress, makeColorGuide(pattern, progress));
@@ -87,4 +88,36 @@ test('custom controls take priority, retain other defaults and recover from malf
   assert.equal(keyBinding({ key: 'Tab', code: 'Tab' }), undefined);
   assert.equal(keyBinding({ key: 'k', code: 'KeyK', metaKey: true }), undefined);
   assert.deepEqual(keyBinding({ key: ' ', code: 'Space' }), { kind: 'key', code: 'Space', label: 'Space' });
+});
+
+test('seeking a stitch keeps the starting coordinates and direction of the current path', () => {
+  const pattern = newPattern(4, 10);
+  const progress = { ...newProgress(pattern, { row: 2, col: 6 }), offset: 7 };
+  assert.equal(seekStitch(pattern, progress, 1, 5), null);
+  assert.equal(seekStitch(pattern, progress, 2, 4), null);
+  assert.equal(seekStitch(pattern, progress, 3, 0), null);
+  assert.equal(seekStitch(pattern, progress, 3, 2), progress);
+  assert.deepEqual(seekStitch(pattern, progress, 2, 5), { ...progress, offset: 0, started: true });
+  const moved = seekStitch(pattern, progress, 4, 7);
+  assert.deepEqual(moved, { ...progress, offset: 22, started: true });
+  assert.deepEqual(tileAt(pattern, moved, moved.offset), tileAt(pattern, progress, 22));
+
+  const leftToRight = newProgress(pattern, { row: 2, col: 6, direction: 'ltr' });
+  assert.equal(seekStitch(pattern, leftToRight, 2, 5), null);
+  assert.equal(seekStitch(pattern, leftToRight, 2, 8).offset, 2);
+});
+
+test('seeking a round validates its actual stitch count', () => {
+  const sphere = newSphere(6);
+  const progress = newProgress(sphere);
+  assert.equal(seekStitch(sphere, progress, 1, 7), null);
+  assert.equal(seekStitch(sphere, progress, 2, 1).offset, 6);
+  assert.equal(seekStitch(sphere, progress, 2, 12).offset, 17);
+});
+
+test('search matches multiple words with differences in case, order and accents', () => {
+  assert(matchPatternName('  zarza ESPIRÁL  ')('Espiral de La Zarza'));
+  assert(!matchPatternName('zarza timple')('Espiral de La Zarza'));
+  assert(matchPatternName('ñANDÚ')('Nandu'));
+  assert(matchPatternName('  ')('Anything'));
 });

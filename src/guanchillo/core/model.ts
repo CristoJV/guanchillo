@@ -387,15 +387,30 @@ export function hasStarted(progress: Progress): boolean {
   return progress.started === true || progress.offset > 0;
 }
 
-export function jumpToStitch(pattern: Pattern, progress: Progress, tile: GridPosition): Progress {
+function stitchOffset(pattern: Pattern, progress: Progress, tile: GridPosition): number {
   const row = pattern.rows - tile.y;
   const { stitches, start } = chartRow(pattern, tile.y);
-  const leftToRight = rowMovesLeftToRight(progress, row);
-  const point = leftToRight ? tile.x : stitches - tile.x - 1;
-  const offset = pattern.cells.length - start - stitches + point - pathStart(pattern, progress);
+  const point = rowMovesLeftToRight(progress, row) ? tile.x : stitches - tile.x - 1;
+  return pattern.cells.length - start - stitches + point - pathStart(pattern, progress);
+}
+
+export function seekStitch(pattern: Pattern, progress: Progress, row: number, point: number): Progress | null {
+  if (!isIntegerInRange(row, progress.row, pattern.rows)) return null;
+  const y = pattern.rows - row;
+  const { stitches } = chartRow(pattern, y);
+  if (!isIntegerInRange(point, 1, stitches)) return null;
+  const x = rowMovesLeftToRight(progress, row) ? point - 1 : stitches - point;
+  const offset = stitchOffset(pattern, progress, { y, x });
+  if (offset < 0) return null;
+  return offset === progress.offset ? progress : { ...progress, offset, started: true };
+}
+
+export function jumpToStitch(pattern: Pattern, progress: Progress, tile: GridPosition): Progress {
+  const offset = stitchOffset(pattern, progress, tile);
   if (offset === progress.offset) return progress;
   if (offset >= 0) return { ...progress, offset, started: true };
-  const direction = leftToRight ? 'ltr' : 'rtl';
+  const row = pattern.rows - tile.y;
+  const direction = rowMovesLeftToRight(progress, row) ? 'ltr' : 'rtl';
   return { ...newProgress(pattern, { row, col: tile.x + 1, direction, alternate: progress.alternate }), started: true };
 }
 

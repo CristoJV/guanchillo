@@ -144,10 +144,19 @@ dialog p { color: var(--muted); font-size: 0.9rem; }
 .check-field input { width: 1.1rem; height: 1.1rem; accent-color: var(--green); }
 .danger { color: #8e3f2b; border-color: #ead3c8; }
 .danger:hover { background: #f9e9e0; }
+#library-dialog { width: min(37rem, calc(100% - 2rem)); }
+#library-dialog > label, #library-status { margin-top: 0.7rem; }
 .library-list { list-style: none; padding: 0; display: grid; gap: 0.5rem; }
-.library-list li { display: flex; gap: 0.4rem; align-items: center; }
-.library-list li > :first-child { flex: 1; justify-content: space-between; text-align: left; overflow-wrap: anywhere; }
-.library-list li small { flex: none; font-size: 0.8rem; color: var(--muted); }
+.library-list li { display: grid; gap: 0.55rem; padding: 0.75rem; border: 1px solid var(--line); border-radius: 0.55rem; }
+.library-list li[aria-current="true"] { border-color: var(--green); }
+.library-description h3 { margin: 0 0 0.18rem; font-size: 1rem; overflow-wrap: anywhere; }
+.library-actions { display: flex; flex-wrap: wrap; gap: 0.38rem; align-items: center; }
+.library-actions .icon-button { height: 2.5rem; width: 2.5rem; }
+.stitch-seek { margin-block: 0.65rem; padding-block: 0.6rem; border-block: 1px solid var(--line); }
+.stitch-seek summary { color: var(--dark-green); font-weight: 650; cursor: pointer; padding-block: 0.35rem; }
+.stitch-seek form { margin-top: 0.4rem; }
+#seek-error { color: #773527; }
+#seek-error:empty, #screen-wake-status:empty { display: none; }
 @media (max-width: 1050px) {
   .workspace { grid-template-columns: minmax(8.6rem, 0.78fr) minmax(0, 2.8fr) minmax(11rem, 1fr); gap: 0.72rem; }
   .panel > section, .editor-disclosure > section { padding: 0.75rem; }
@@ -313,6 +322,7 @@ dialog p { color: var(--muted); font-size: 0.9rem; }
 
   .catalog-gallery { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
   .catalog-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .catalog-search-field { grid-column: 1 / -1; }
   .catalog-filters select { width: 100%; min-height: 2.75rem; }
   .template-preview { min-height: 8rem; }
   .template-details { padding: 0.6rem; }

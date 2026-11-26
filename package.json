@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc && node scripts/copy-static.js",
+    "build": "node scripts/build.js",
     "check": "tsc --noEmit",
     "test": "npm run build && node --test tests/model.test.js tests/crochet.test.js",
     "test:browser": "npm run build && node --test tests/browser.test.js"
